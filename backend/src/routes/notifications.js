@@ -19,6 +19,27 @@ function requireFirebase(req, res, next) {
 }
 
 /**
+ * Helper to construct standard WebPush options with high urgency and OS banners
+ */
+function buildWebPushConfig(title, body, url = '/') {
+  return {
+    headers: {
+      Urgency: 'high',
+    },
+    notification: {
+      title,
+      body,
+      icon: '/favicon.svg',
+      badge: '/favicon.svg',
+      requireInteraction: true,
+    },
+    fcmOptions: {
+      link: url,
+    },
+  };
+}
+
+/**
  * GET /api/notifications/logs
  * Returns recent in-memory logs for FCM subscriptions, dispatches, successes, and errors
  */
@@ -217,7 +238,7 @@ router.post('/coordinator-alert', requireFirebase, async (req, res) => {
         tokens: uniqueCoords,
         notification: { title, body },
         data: { type: type || 'coordinator_alert', sessionId: sessionId || '', url },
-        webpush: { fcmOptions: { link: url } },
+        webpush: buildWebPushConfig(title, body, url),
       });
 
       if (response.successCount > 0) {
@@ -248,7 +269,7 @@ router.post('/coordinator-alert', requireFirebase, async (req, res) => {
       topic,
       notification: { title, body },
       data: { type: type || 'coordinator_alert', sessionId: sessionId || '', url },
-      webpush: { fcmOptions: { link: url } },
+      webpush: buildWebPushConfig(title, body, url),
     });
 
     addLog('success', `Delivered coordinator alert via topic "${topic}". MessageId: ${response}`);
@@ -330,15 +351,7 @@ router.post('/send-to-token', requireFirebase, async (req, res) => {
         click_action: url,
         timestamp: new Date().toISOString(),
       },
-      webpush: {
-        fcmOptions: {
-          link: url,
-        },
-        notification: {
-          icon: '/favicon.svg',
-          badge: '/favicon.svg',
-        },
-      },
+      webpush: buildWebPushConfig(title, body, url),
     };
 
     const response = await messaging.send(message);
@@ -419,11 +432,7 @@ router.post('/send-to-user', requireFirebase, async (req, res) => {
         ...data,
         click_action: url,
       },
-      webpush: {
-        fcmOptions: {
-          link: url,
-        },
-      },
+      webpush: buildWebPushConfig(title, body, url),
     };
 
     const response = await messaging.sendEachForMulticast(multicastMessage);
@@ -547,7 +556,7 @@ router.post('/session-alert', requireFirebase, async (req, res) => {
           tokens: uniqueTokens,
           notification: { title, body },
           data: { sessionId, targetUrl },
-          webpush: { fcmOptions: { link: targetUrl } },
+          webpush: buildWebPushConfig(title, body, targetUrl),
         });
 
         if (response.successCount > 0) {
@@ -602,7 +611,7 @@ router.post('/session-alert', requireFirebase, async (req, res) => {
             tokens: uniqueAll,
             notification: { title, body },
             data: { sessionId, targetUrl },
-            webpush: { fcmOptions: { link: targetUrl } },
+            webpush: buildWebPushConfig(title, body, targetUrl),
           });
 
           if (response.successCount > 0) {
@@ -649,7 +658,7 @@ router.post('/session-alert', requireFirebase, async (req, res) => {
       topic,
       notification: { title, body },
       data: { sessionId, targetUrl },
-      webpush: { fcmOptions: { link: targetUrl } },
+      webpush: buildWebPushConfig(title, body, targetUrl),
     });
 
     addLog('success', `Broadcasted session alert to topic '${topic}'. Message ID: ${response}`, {
@@ -734,7 +743,7 @@ router.post('/correction-alert', requireFirebase, async (req, res) => {
       tokens: uniqueTokens,
       notification: { title, body },
       data: { type: 'correction_update', status },
-      webpush: { fcmOptions: { link: '/student/history' } },
+      webpush: buildWebPushConfig(title, body, '/student/history'),
     });
 
     if (response.successCount > 0) {

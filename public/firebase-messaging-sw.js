@@ -2,6 +2,15 @@
 importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js');
 
+// Service Worker lifecycle - activate immediately
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // Initialize the Firebase app in the service worker
 firebase.initializeApp({
   apiKey: "AIzaSyCp6GbfCN-Ke1FKCAFYbg1iMFdfDVclLAQ",
@@ -15,6 +24,7 @@ firebase.initializeApp({
 // Retrieve an instance of Firebase Messaging
 const messaging = firebase.messaging();
 
+// Handle data-only background messages
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Background message received:', payload);
 
@@ -23,7 +33,7 @@ messaging.onBackgroundMessage((payload) => {
     body: payload.notification?.body || payload.data?.body || 'New session or attendance update.',
     icon: '/favicon.svg',
     badge: '/favicon.svg',
-    tag: payload.data?.sessionId || 'attendance-notification',
+    tag: payload.data?.sessionId || 'attendance-' + Date.now(),
     data: payload.data || {},
     vibrate: [200, 100, 200],
     requireInteraction: true,
@@ -34,24 +44,25 @@ messaging.onBackgroundMessage((payload) => {
 
 // Generic WebPush push event handler ensuring outside-app OS notification banners
 self.addEventListener('push', (event) => {
-  let data = {};
-  if (event.data) {
-    try {
-      data = event.data.json();
-    } catch {
-      data = { body: event.data.text() };
-    }
+  if (!event.data) return;
+
+  let payload = {};
+  try {
+    payload = event.data.json();
+  } catch {
+    payload = { body: event.data.text() };
   }
 
-  const title = data.notification?.title || data.data?.title || data.title || 'Innovations Lab Attendance';
-  const body = data.notification?.body || data.data?.body || data.body || 'New session or attendance update.';
+  const title = payload.notification?.title || payload.data?.title || payload.title || 'Innovations Lab Attendance';
+  const body = payload.notification?.body || payload.data?.body || payload.body || 'New session or attendance update.';
+  const tag = payload.data?.sessionId || payload.notification?.tag || 'attendance-' + Date.now();
 
   const options = {
     body,
     icon: '/favicon.svg',
     badge: '/favicon.svg',
-    tag: data.data?.sessionId || 'attendance-' + Date.now(),
-    data: data.data || data,
+    tag,
+    data: payload.data || payload,
     vibrate: [200, 100, 200],
     requireInteraction: true,
   };
@@ -62,7 +73,11 @@ self.addEventListener('push', (event) => {
 // Handle notification click to navigate to the relevant session or history page
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.click_action || event.notification.data?.url || event.notification.data?.targetUrl || '/';
+  const targetUrl =
+    event.notification.data?.click_action ||
+    event.notification.data?.url ||
+    event.notification.data?.targetUrl ||
+    '/';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {

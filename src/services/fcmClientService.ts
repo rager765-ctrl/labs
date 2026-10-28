@@ -12,8 +12,11 @@ export const FCM_TOKEN_STORAGE_KEY = 'attendance_fcm_token';
  */
 export function getBackendBaseUrl(): string {
   const custom = localStorage.getItem(BACKEND_URL_STORAGE_KEY);
-  if (custom && custom.trim()) return custom.trim().replace(/\/$/, '');
-  return (import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
+  if (custom && custom.trim() && !custom.includes('localhost:5000')) {
+    return custom.trim().replace(/\/$/, '');
+  }
+  // Default to live Render backend
+  return (import.meta.env.VITE_BACKEND_URL || 'https://labs-pyi3.onrender.com').replace(/\/$/, '');
 }
 
 /**
@@ -275,22 +278,28 @@ export function triggerSystemNotification(title: string, body: string, url?: str
     return;
   }
 
+  const notificationOptions: NotificationOptions = {
+    body,
+    icon: '/favicon.svg',
+    badge: '/favicon.svg',
+    tag: 'attendance-' + Date.now(),
+    data: { url: url || '/' },
+    requireInteraction: true,
+  };
+
   try {
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.ready.then(reg => {
-        reg.showNotification(title, {
-          body,
-          icon: '/favicon.svg',
-          badge: '/favicon.svg',
-          tag: 'attendance-' + Date.now(),
-          data: { url: url || '/' },
-          requireInteraction: true,
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready
+        .then(reg => {
+          reg.showNotification(title, notificationOptions);
+        })
+        .catch(() => {
+          try {
+            new Notification(title, notificationOptions);
+          } catch {}
         });
-      }).catch(() => {
-        new Notification(title, { body, icon: '/favicon.svg' });
-      });
     } else {
-      new Notification(title, { body, icon: '/favicon.svg' });
+      new Notification(title, notificationOptions);
     }
   } catch (err) {
     console.warn('Could not display system notification:', err);
