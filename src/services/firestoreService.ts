@@ -5,10 +5,13 @@ import {
   getDocs,
   onSnapshot,
   updateDoc,
+  deleteDoc,
+  query,
+  where,
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { LabSession, AttendanceRecord, CorrectionRequest, SessionStatus } from '../types';
+import type { User, UserRole, LabSession, AttendanceRecord, CorrectionRequest, SessionStatus } from '../types';
 
 // Firestore Collection Names
 export const SESSIONS_COLLECTION = 'sessions';
@@ -93,11 +96,19 @@ export const subscribeToSessions = (onUpdate: (sessions: LabSession[]) => void):
   );
 };
 
-// Real-time listener for Attendance Records
-export const subscribeToAttendance = (onUpdate: (records: AttendanceRecord[]) => void): (() => void) => {
+// Real-time listener for Attendance Records (Role-aware to respect Firestore query security rules)
+export const subscribeToAttendance = (
+  onUpdate: (records: AttendanceRecord[]) => void,
+  role?: UserRole,
+  studentId?: string
+): (() => void) => {
   const colRef = collection(db, ATTENDANCE_COLLECTION);
+  const targetQuery = role === 'student' && studentId
+    ? query(colRef, where('studentId', '==', studentId))
+    : colRef;
+
   return onSnapshot(
-    colRef,
+    targetQuery,
     (snapshot) => {
       const recordsList: AttendanceRecord[] = [];
       snapshot.forEach((docSnap) => {
@@ -111,11 +122,19 @@ export const subscribeToAttendance = (onUpdate: (records: AttendanceRecord[]) =>
   );
 };
 
-// Real-time listener for Correction Requests
-export const subscribeToCorrections = (onUpdate: (corrections: CorrectionRequest[]) => void): (() => void) => {
+// Real-time listener for Correction Requests (Role-aware to respect Firestore query security rules)
+export const subscribeToCorrections = (
+  onUpdate: (corrections: CorrectionRequest[]) => void,
+  role?: UserRole,
+  studentId?: string
+): (() => void) => {
   const colRef = collection(db, CORRECTIONS_COLLECTION);
+  const targetQuery = role === 'student' && studentId
+    ? query(colRef, where('studentId', '==', studentId))
+    : colRef;
+
   return onSnapshot(
-    colRef,
+    targetQuery,
     (snapshot) => {
       const correctionsList: CorrectionRequest[] = [];
       snapshot.forEach((docSnap) => {
@@ -129,16 +148,50 @@ export const subscribeToCorrections = (onUpdate: (corrections: CorrectionRequest
   );
 };
 
+// Real-time listener for Registered Students
+export const subscribeToStudents = (onUpdate: (students: User[]) => void): (() => void) => {
+  const colRef = collection(db, USERS_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const studentsList: User[] = [];
+      snapshot.forEach((docSnap) => {
+        const u = docSnap.data() as User;
+        if (u.role === 'student') {
+          studentsList.push(u);
+        }
+      });
+      onUpdate(studentsList);
+    },
+    (error) => {
+      console.warn('Firestore students subscription error:', error);
+    }
+  );
+};
+
+// Deeply remove undefined fields so Firestore writes never fail
+export function sanitizeForFirestore<T>(data: T): T {
+  return JSON.parse(
+    JSON.stringify(data, (_key, value) => (value === undefined ? null : value))
+  );
+}
+
 // Save or Update Attendance Record
 export const saveAttendanceToFirestore = async (record: AttendanceRecord): Promise<void> => {
   const docRef = doc(db, ATTENDANCE_COLLECTION, record.id);
-  await setDoc(docRef, record, { merge: true });
+  const clean = sanitizeForFirestore(record);
+  await setDoc(docRef, clean, { merge: true });
 };
 
 // Save or Create Lab Session
 export const saveSessionToFirestore = async (session: LabSession): Promise<void> => {
   const docRef = doc(db, SESSIONS_COLLECTION, session.id);
-  await setDoc(docRef, session, { merge: true });
+  const clean = sanitizeForFirestore(session);
+  await setDoc(docRef, clean, { merge: true });
+};
+
+export const deleteSessionFromFirestore = async (sessionId: string): Promise<void> => {
+  await deleteDoc(doc(db, SESSIONS_COLLECTION, sessionId));
 };
 
 // Update Session Status
@@ -150,7 +203,8 @@ export const updateSessionStatusInFirestore = async (sessionId: string, status: 
 // Save Correction Request
 export const saveCorrectionToFirestore = async (correction: CorrectionRequest): Promise<void> => {
   const docRef = doc(db, CORRECTIONS_COLLECTION, correction.id);
-  await setDoc(docRef, correction, { merge: true });
+  const clean = sanitizeForFirestore(correction);
+  await setDoc(docRef, clean, { merge: true });
 };
 
 // Update Correction Status

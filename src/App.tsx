@@ -67,6 +67,7 @@ const AppContent: React.FC = () => {
         <Route path="/coordinator" element={<RequireRole role="coordinator"><CoordinatorDashboard /></RequireRole>} />
         <Route path="/coordinator/sessions" element={<RequireRole role="coordinator"><CoordinatorSessionList /></RequireRole>} />
         <Route path="/coordinator/sessions/new" element={<RequireRole role="coordinator"><CreateSessionForm /></RequireRole>} />
+        <Route path="/coordinator/sessions/:sessionId/edit" element={<RequireRole role="coordinator"><CreateSessionForm /></RequireRole>} />
         <Route path="/coordinator/sessions/:sessionId" element={<RequireRole role="coordinator"><CoordinatorSessionLive /></RequireRole>} />
         <Route path="/coordinator/sessions/:sessionId/attendance" element={<RequireRole role="coordinator"><CoordinatorAttendanceManagement /></RequireRole>} />
         <Route path="/coordinator/reports" element={<RequireRole role="coordinator"><CoordinatorReports /></RequireRole>} />

@@ -1,5 +1,5 @@
-﻿import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { CoordinatorNav } from '../../components/coordinator/CoordinatorNav';
 import { AlertCircle, ArrowLeft, MapPin, Locate } from 'lucide-react';
@@ -7,7 +7,9 @@ import { getDeviceCurrentPosition } from '../../services/geoService';
 
 export const CreateSessionForm: React.FC = () => {
   const navigate = useNavigate();
-  const { createSession, students, sessions } = useApp();
+  const { createSession, updateSession, students, sessions } = useApp();
+  const { sessionId } = useParams<{ sessionId: string }>();
+  const editingSession = sessions.find(session => session.id === sessionId);
 
   const [title, setTitle] = useState('');
   const [courseCode, setCourseCode] = useState('CS302');
@@ -40,6 +42,34 @@ export const CreateSessionForm: React.FC = () => {
   const [standaloneMap, setStandaloneMap] = useState(false);
 
   useEffect(() => {
+    if (!editingSession) return;
+    const startsAt = new Date(editingSession.startsAt);
+    const endsAt = new Date(editingSession.endsAt);
+    const toLocalDate = (dateValue: Date) => new Date(dateValue.getTime() - dateValue.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const toLocalTime = (dateValue: Date) => `${String(dateValue.getHours()).padStart(2, '0')}:${String(dateValue.getMinutes()).padStart(2, '0')}`;
+    setTitle(editingSession.title);
+    setCourseCode(editingSession.courseCode || '');
+    setLabName(editingSession.labName);
+    setRoom(editingSession.room);
+    setDate(toLocalDate(startsAt));
+    setStartTime(toLocalTime(startsAt));
+    setEndTime(toLocalTime(endsAt));
+    setCheckInOffsetMinutes(Math.max(0, Math.round((startsAt.getTime() - new Date(editingSession.checkInOpensAt).getTime()) / 60000)));
+    setLateThresholdMinutes(editingSession.lateAfterMinutes);
+    setRequiresCheckOut(editingSession.requiresCheckOut);
+    setDescription(editingSession.description || '');
+    setNotes(editingSession.notes || '');
+    setGeofenceEnabled(!!editingSession.geofence?.enabled);
+    setLatitude(editingSession.geofence?.latitude || 0);
+    setLongitude(editingSession.geofence?.longitude || 0);
+    setRadiusMeters(editingSession.geofence?.radiusMeters || 50);
+    setStrictEnforcement(editingSession.geofence?.strictEnforcement ?? true);
+    setLocationName(editingSession.geofence?.venueName || 'Use your device location or enter coordinates');
+  // Initialize the form once the requested session is available from local or cloud state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, editingSession?.id]);
+
+  useEffect(() => {
     if (latitude === 0 && longitude === 0) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
@@ -62,7 +92,7 @@ export const CreateSessionForm: React.FC = () => {
   // Check for potential room conflict
   const hasRoomConflict = sessions.some(s => {
     const sDate = s.startsAt.split('T')[0];
-    return sDate === date && s.room.toLowerCase() === room.toLowerCase() && s.status !== 'completed' && s.status !== 'cancelled';
+    return s.id !== editingSession?.id && sDate === date && s.room.toLowerCase() === room.toLowerCase() && s.status !== 'completed' && s.status !== 'cancelled';
   });
 
   const handleRequestDeviceLocation = async () => {
@@ -88,7 +118,7 @@ export const CreateSessionForm: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
@@ -125,12 +155,12 @@ export const CreateSessionForm: React.FC = () => {
         }
       : undefined;
 
-    const created = createSession({
+    const sessionData = {
       title: title.trim(),
       courseCode: courseCode.trim().toUpperCase(),
       labName: labName.trim(),
       room: room.trim(),
-      eligibleStudentIds: students.map(s => s.id),
+      eligibleStudentIds: editingSession?.eligibleStudentIds || students.map(s => s.id),
       startsAt,
       endsAt,
       checkInOpensAt,
@@ -139,10 +169,31 @@ export const CreateSessionForm: React.FC = () => {
       description: description.trim(),
       notes: notes.trim(),
       geofence,
-    });
+    };
 
-    navigate(`/coordinator/sessions/${created.id}`);
+    if (editingSession) {
+      updateSession(editingSession.id, sessionData);
+      navigate('/coordinator/sessions');
+    } else {
+      const created = await createSession(sessionData);
+      navigate(`/coordinator/sessions/${created.id}`);
+    }
   };
+
+  if (sessionId && !editingSession) {
+    return (
+      <div className="coordinator-layout" style={{ backgroundColor: 'var(--color-brand-50)' }}>
+        <CoordinatorNav />
+        <main className="coordinator-main">
+          <div className="card" style={{ padding: '24px' }}>
+            <h1 style={{ fontSize: '20px', marginBottom: '8px' }}>Session not found</h1>
+            <p style={{ fontSize: '13px', color: 'var(--color-ink-500)', marginBottom: '16px' }}>This session may have been deleted or is no longer available to edit.</p>
+            <button type="button" className="btn-secondary" onClick={() => navigate('/coordinator/sessions')}>Back to Sessions</button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="coordinator-layout" style={{ backgroundColor: 'var(--color-brand-50)' }}>
@@ -172,10 +223,10 @@ export const CreateSessionForm: React.FC = () => {
 
         <div style={{ marginBottom: '20px' }}>
           <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-ink-900)', margin: '0 0 4px 0' }}>
-            Schedule New Laboratory Session
+            {editingSession ? 'Edit Laboratory Session' : 'Schedule New Laboratory Session'}
           </h1>
           <p style={{ fontSize: '13px', color: 'var(--color-ink-500)', margin: 0 }}>
-            Configure attendance parameters, eligible cohorts, check-in windows, and QR verification options.
+              {editingSession ? 'Update the session schedule, venue, attendance rules, and check-in options.' : 'Configure attendance parameters, eligible cohorts, check-in windows, and QR verification options.'}
           </p>
         </div>
 
@@ -687,7 +738,7 @@ export const CreateSessionForm: React.FC = () => {
               className="btn-primary"
               style={{ height: '44px', padding: '0 24px', fontSize: '13px' }}
             >
-              Schedule Session
+              {editingSession ? 'Save Session Changes' : 'Schedule Session'}
             </button>
           </div>
         </form>

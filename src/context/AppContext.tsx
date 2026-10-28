@@ -29,8 +29,10 @@ import {
   subscribeToSessions,
   subscribeToAttendance,
   subscribeToCorrections,
+  subscribeToStudents,
   saveAttendanceToFirestore,
   saveSessionToFirestore,
+  deleteSessionFromFirestore,
   updateSessionStatusInFirestore,
   saveCorrectionToFirestore,
   updateCorrectionInFirestore,
@@ -96,7 +98,9 @@ interface AppContextValue {
   removeToast: (id: string) => void;
   checkInStudent: (sessionId: string, studentId: string, method?: string, coords?: CheckInCoords) => CheckInResult;
   checkOutStudent: (sessionId: string, studentId: string, coords?: CheckInCoords) => CheckOutResult;
-  createSession: (session: Omit<LabSession, 'id' | 'status' | 'coordinatorId'>) => LabSession;
+  createSession: (session: Omit<LabSession, 'id' | 'status' | 'coordinatorId'>) => Promise<LabSession> | LabSession;
+  updateSession: (sessionId: string, session: Omit<LabSession, 'id' | 'status' | 'coordinatorId'>) => void;
+  deleteSession: (sessionId: string) => void;
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
   markAttendanceManual: (sessionId: string, studentId: string, status: AttendanceStatus, reason: string) => void;
   submitCorrectionRequest: (recordId: string, requestedStatus: AttendanceStatus, reason: string) => void;
@@ -147,11 +151,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  // Initialize Firebase Analytics, Auth Listener & Realtime Firestore listeners
+  // Initialize Firebase Analytics & Listen to Firebase Auth state
   useEffect(() => {
     initAnalytics();
 
-    // Listen to Firebase Auth state
     const unsubscribeAuth = listenToAuthChanges((profile: User | null, fbUser: FirebaseUser | null) => {
       setFirebaseUser(fbUser);
       if (profile) {
@@ -169,39 +172,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setAuthLoading(false);
     });
 
-    // Seed Firestore if empty
+    // Seed Firestore connectivity check
     seedFirestoreIfEmpty().then((seeded: boolean) => {
       if (seeded) {
         console.log('Seeded initial sessions and attendance to Firestore BaaS');
       }
       setIsCloudConnected(true);
     }).catch((err: unknown) => {
-      console.warn('Firestore seeding check failed:', err);
-    });
-
-    // Realtime Firestore listeners
-    const unsubSessions = subscribeToSessions((cloudSessions: LabSession[]) => {
-      setState(prev => ({ ...prev, sessions: cloudSessions }));
-      setIsCloudConnected(true);
-    });
-
-    const unsubAttendance = subscribeToAttendance((cloudAttendance: AttendanceRecord[]) => {
-      setState(prev => ({ ...prev, attendanceRecords: cloudAttendance }));
-      setIsCloudConnected(true);
-    });
-
-    const unsubCorrections = subscribeToCorrections((cloudCorrections: CorrectionRequest[]) => {
-      setState(prev => ({ ...prev, corrections: cloudCorrections }));
-      setIsCloudConnected(true);
+      console.warn('Firestore seeding check:', err);
     });
 
     return () => {
       unsubscribeAuth();
+    };
+  }, []);
+
+  // Manage Realtime Firestore Listeners Reactively (re-established when user authenticates)
+  useEffect(() => {
+    if (!firebaseUser) {
+      setIsCloudConnected(false);
+      return;
+    }
+
+    setIsCloudConnected(true);
+
+    // 1. Live Lab Sessions
+    const unsubSessions = subscribeToSessions((cloudSessions: LabSession[]) => {
+      setState(prev => ({ ...prev, sessions: cloudSessions }));
+    });
+
+    // 2. Live Registered Students
+    const unsubStudents = subscribeToStudents((cloudStudents: User[]) => {
+      setState(prev => ({ ...prev, students: cloudStudents }));
+    });
+
+    // 3. Live Attendance (scoped to studentId for students, global for coordinators)
+    const unsubAttendance = subscribeToAttendance(
+      (cloudAttendance: AttendanceRecord[]) => {
+        setState(prev => ({ ...prev, attendanceRecords: cloudAttendance }));
+      },
+      state.currentUser?.role,
+      firebaseUser.uid
+    );
+
+    // 4. Live Corrections (scoped to studentId for students, global for coordinators)
+    const unsubCorrections = subscribeToCorrections(
+      (cloudCorrections: CorrectionRequest[]) => {
+        setState(prev => ({ ...prev, corrections: cloudCorrections }));
+      },
+      state.currentUser?.role,
+      firebaseUser.uid
+    );
+
+    return () => {
       unsubSessions();
+      unsubStudents();
       unsubAttendance();
       unsubCorrections();
     };
-  }, []);
+  }, [firebaseUser, state.currentUser?.role, state.currentUser?.id]);
 
   const switchRole = useCallback((role: UserRole) => {
     setState(prev => ({
@@ -423,12 +452,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [state.sessions, state.attendanceRecords, addToast]);
 
-  const createSession = useCallback((data: Omit<LabSession, 'id' | 'status' | 'coordinatorId'>): LabSession => {
+  const createSession = useCallback(async (data: Omit<LabSession, 'id' | 'status' | 'coordinatorId'>): Promise<LabSession> => {
     const id = `session-${Date.now()}`;
+    const coordId = firebaseUser?.uid || state.currentUser?.id || 'coord-admin';
     const newSession: LabSession = {
       ...data,
       id,
-      coordinatorId: state.currentUser?.id || 'coord-admin',
+      coordinatorId: coordId,
       status: 'scheduled',
       pin: Math.floor(1000 + Math.random() * 9000).toString(),
       qrCode: `SESSION-${data.courseCode || 'LAB'}-${Date.now().toString().slice(-4)}`,
@@ -436,17 +466,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setState(prev => ({
       ...prev,
-      sessions: [newSession, ...prev.sessions],
+      sessions: [newSession, ...prev.sessions.filter(s => s.id !== id)],
     }));
 
-    // Asynchronously push to Firestore
-    saveSessionToFirestore(newSession).catch((err: unknown) => {
+    try {
+      await saveSessionToFirestore(newSession);
+      addToast(`Session "${newSession.title}" scheduled successfully`, 'success', 'Session Created');
+    } catch (err: any) {
       console.warn('Could not sync created session to Firestore:', err);
-    });
+      addToast(`Session saved locally. Cloud sync notice: ${err?.message || 'Permission denied'}`, 'error', 'Sync Notice');
+    }
 
-    addToast(`Session "${newSession.title}" scheduled successfully`, 'success', 'Session Created');
     return newSession;
-  }, [state.currentUser?.id, addToast]);
+  }, [firebaseUser?.uid, state.currentUser?.id, addToast]);
 
   const updateSessionStatus = useCallback((sessionId: string, status: SessionStatus) => {
     setState(prev => ({
@@ -460,6 +492,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     addToast(`Session status updated to ${status.toUpperCase()}`, 'info');
+  }, [addToast]);
+
+  const updateSession = useCallback((sessionId: string, updates: Omit<LabSession, 'id' | 'status' | 'coordinatorId'>) => {
+    const existing = state.sessions.find(session => session.id === sessionId);
+    if (!existing) return;
+    const updatedSession = { ...existing, ...updates };
+    setState(prev => ({
+      ...prev,
+      sessions: prev.sessions.map(session => session.id === sessionId ? updatedSession : session),
+    }));
+    saveSessionToFirestore(updatedSession).catch((err: unknown) => {
+      console.warn('Could not sync updated session to Firestore:', err);
+    });
+    addToast(`Session "${updatedSession.title}" updated successfully`, 'success', 'Session Updated');
+  }, [state.sessions, addToast]);
+
+  const deleteSession = useCallback((sessionId: string) => {
+    setState(prev => ({
+      ...prev,
+      sessions: prev.sessions.filter(session => session.id !== sessionId),
+    }));
+    deleteSessionFromFirestore(sessionId).catch((err: unknown) => {
+      console.warn('Could not delete session from Firestore:', err);
+      addToast('Could not sync session deletion to the cloud.', 'error', 'Delete Sync Failed');
+    });
+    addToast('Session deleted.', 'success', 'Session Deleted');
   }, [addToast]);
 
   const markAttendanceManual = useCallback((
@@ -746,6 +804,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         checkInStudent,
         checkOutStudent,
         createSession,
+        updateSession,
+        deleteSession,
         updateSessionStatus,
         markAttendanceManual,
         submitCorrectionRequest,

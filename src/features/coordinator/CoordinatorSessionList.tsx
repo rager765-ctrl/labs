@@ -4,12 +4,12 @@ import { useApp } from '../../context/AppContext';
 import { CoordinatorNav } from '../../components/coordinator/CoordinatorNav';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import type { SessionStatus } from '../../types';
-import { PlusCircle, Search, Clock, MapPin, Users, ChevronRight, Play, Eye } from 'lucide-react';
+import { PlusCircle, Search, Clock, MapPin, Users, ChevronRight, Play, Eye, Pencil, Trash2 } from 'lucide-react';
 import { formatTime, formatDate, calculateSessionMetrics } from '../../services/storage';
 
 export const CoordinatorSessionList: React.FC = () => {
   const navigate = useNavigate();
-  const { sessions, attendanceRecords, updateSessionStatus } = useApp();
+  const { sessions, attendanceRecords, updateSessionStatus, deleteSession } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<SessionStatus | 'all'>('all');
@@ -147,6 +147,7 @@ export const CoordinatorSessionList: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {filteredSessions.map(session => {
               const m = calculateSessionMetrics(session, attendanceRecords);
+              const hasAttendance = attendanceRecords.some(record => record.sessionId === session.id);
               return (
                 <div
                   key={session.id}
@@ -222,7 +223,46 @@ export const CoordinatorSessionList: React.FC = () => {
                       Check-out required: <strong>{session.requiresCheckOut ? 'Yes' : 'No'}</strong> • Late threshold: <strong>{session.lateAfterMinutes} min</strong>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      {session.status === 'scheduled' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/coordinator/sessions/${session.id}/edit`)}
+                            className="btn-secondary"
+                            style={{ height: '36px', fontSize: '12px', padding: '0 12px' }}
+                          >
+                            <Pencil size={14} />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={hasAttendance}
+                            onClick={() => {
+                              if (window.confirm(`Delete “${session.title}”? This action cannot be undone.`)) deleteSession(session.id);
+                            }}
+                            title={hasAttendance ? 'This session has attendance records and cannot be deleted.' : 'Delete this scheduled session'}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '5px',
+                              height: '36px',
+                              padding: '0 12px',
+                              border: '1px solid #f2c4c9',
+                              borderRadius: 'var(--radius-pill)',
+                              background: hasAttendance ? '#f1f2f5' : '#fff',
+                              color: hasAttendance ? '#9298a7' : 'var(--color-danger-700)',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: hasAttendance ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            <Trash2 size={14} />
+                            <span>Delete</span>
+                          </button>
+                        </>
+                      )}
                       {session.status === 'scheduled' && (
                         <button
                           onClick={() => {

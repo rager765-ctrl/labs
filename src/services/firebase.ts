@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 
 // Firebase configuration provided for attendance-9a7f5
@@ -17,9 +17,11 @@ export const firebaseConfig = {
 // Initialize Firebase app singleton
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Authentication & Firestore BaaS instances
+// Initialize Authentication & Firestore BaaS instances with undefined property tolerance
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = initializeFirestore(app, {
+  ignoreUndefinedProperties: true,
+});
 
 // Initialize Analytics conditionally where supported (browser environment)
 export const initAnalytics = async () => {

@@ -91,12 +91,12 @@ export function calculateStudentAttendanceMetrics(records: AttendanceRecord[], s
 
 export function calculateSessionMetrics(session: LabSession, records: AttendanceRecord[]) {
   const sessionRecords = records.filter(r => r.sessionId === session.id);
-  const totalExpected = session.eligibleStudentIds.length;
   const present = sessionRecords.filter(r => r.status === 'present').length;
   const late = sessionRecords.filter(r => r.status === 'late').length;
   const excused = sessionRecords.filter(r => r.status === 'excused').length;
   const absent = sessionRecords.filter(r => r.status === 'absent').length;
   const totalArrived = present + late;
+  const totalExpected = Math.max(session.eligibleStudentIds?.length || 0, totalArrived + excused + absent);
   const pending = Math.max(0, totalExpected - (present + late + excused + absent));
   const rate = totalExpected > 0 ? Math.round(((present + late) / totalExpected) * 100) : 0;
 
