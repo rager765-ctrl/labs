@@ -19,10 +19,12 @@ export const StudentHistory: React.FC = () => {
   const [requestedStatus, setRequestedStatus] = useState<AttendanceStatus>('present');
   const [reasonInput, setReasonInput] = useState('');
 
-  const metrics = calculateStudentAttendanceMetrics(attendanceRecords, currentUser.id);
+  const metrics = calculateStudentAttendanceMetrics(attendanceRecords, currentUser?.id || '');
 
   // Filter student's past and recorded sessions
-  const studentRecords = attendanceRecords.filter(r => r.studentId === currentUser.id);
+  const studentRecords = currentUser
+    ? attendanceRecords.filter(r => r.studentId === currentUser.id)
+    : [];
 
   // Map records with their session details
   const historyItems = studentRecords

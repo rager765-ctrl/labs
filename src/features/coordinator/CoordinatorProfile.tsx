@@ -39,17 +39,17 @@ export const CoordinatorProfile: React.FC = () => {
                 overflow: 'hidden',
               }}
             >
-              {currentUser.avatarUrl ? (
-                <img src={currentUser.avatarUrl} alt={currentUser.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {currentUser?.avatarUrl ? (
+                <img src={currentUser.avatarUrl} alt={currentUser.name || 'Coordinator'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                'EV'
+                (currentUser?.name || 'EV').split(' ').map(n => n[0]).join('')
               )}
             </div>
 
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-ink-900)', margin: 0 }}>
-                  {currentUser.name}
+                  {currentUser?.name || 'Coordinator'}
                 </h2>
                 <span
                   style={{
@@ -65,10 +65,10 @@ export const CoordinatorProfile: React.FC = () => {
                 </span>
               </div>
               <div style={{ fontSize: '13px', color: 'var(--color-brand-600)', fontWeight: 600, marginTop: '2px' }}>
-                {currentUser.level}
+                {currentUser?.level || 'Lab Coordinator'}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--color-ink-500)', marginTop: '2px' }}>
-                Faculty ID: {currentUser.studentId}
+                Faculty ID: {currentUser?.studentId || 'FAC-ONLINE'}
               </div>
             </div>
           </div>
@@ -86,11 +86,11 @@ export const CoordinatorProfile: React.FC = () => {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--color-ink-500)' }}>Department:</span>
-              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser.programme}</strong>
+              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser?.programme || 'Computing Sciences'}</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--color-ink-500)' }}>Contact Email:</span>
-              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser.email}</strong>
+              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser?.email || 'coordinator@university.edu'}</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--color-ink-500)' }}>Assigned Facilities:</span>

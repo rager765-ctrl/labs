@@ -76,7 +76,7 @@ export function calculateStudentAttendanceMetrics(records: AttendanceRecord[], s
   const total = present + late + excused + absent;
   // Present + Excused count 100%, Late counts 80% (or standard 100% presence with late flag)
   const attendedCount = present + late;
-  const rate = total > 0 ? Math.round(((present + late + excused) / total) * 100) : 100;
+  const rate = total > 0 ? Math.round(((present + late + excused) / total) * 100) : 0;
 
   return {
     total,

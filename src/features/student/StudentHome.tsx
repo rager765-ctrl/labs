@@ -13,14 +13,14 @@ export const StudentHome: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, sessions, attendanceRecords, checkOutStudent, addToast } = useApp();
 
-  const metrics = calculateStudentAttendanceMetrics(attendanceRecords, currentUser.id);
+  const metrics = calculateStudentAttendanceMetrics(attendanceRecords, currentUser?.id || '');
 
   // Today's primary live or upcoming session
   const todayLiveSession = sessions.find(s => s.status === 'live');
   const todayScheduledSession = sessions.find(s => s.status === 'scheduled');
   const primarySession = todayLiveSession || todayScheduledSession || sessions[0] || null;
 
-  const primaryRecord = primarySession
+  const primaryRecord = (primarySession && currentUser)
     ? attendanceRecords.find(r => r.sessionId === primarySession.id && r.studentId === currentUser.id)
     : undefined;
 
@@ -32,7 +32,7 @@ export const StudentHome: React.FC = () => {
   };
 
   const handleCheckOut = () => {
-    if (!primarySession) return;
+    if (!primarySession || !currentUser) return;
     const result = checkOutStudent(primarySession.id, currentUser.id);
     if (!result.success) {
       addToast(result.message, 'error');

@@ -121,6 +121,18 @@ export const ScannerView: React.FC = () => {
       return;
     }
 
+    if (!currentUser) {
+      setSheetConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Sign In Required',
+        message: 'You must be signed in with your university student account to record attendance.',
+        primaryActionText: 'Sign In',
+        onPrimaryAction: () => navigate('/login'),
+      });
+      return;
+    }
+
     const currentRec = attendanceRecords.find(r => r.sessionId === matchedSession.id && r.studentId === currentUser.id);
     const checkedIn = currentRec && (currentRec.status === 'present' || currentRec.status === 'late');
 
@@ -188,7 +200,7 @@ export const ScannerView: React.FC = () => {
         });
       }
     }
-  }, [hasScannedCode, sessions, activeSession, attendanceRecords, currentUser.id, studentCoords, checkInStudent, checkOutStudent, navigate]);
+  }, [hasScannedCode, sessions, activeSession, attendanceRecords, currentUser?.id, studentCoords, checkInStudent, checkOutStudent, navigate]);
 
   // Start Camera stream with resilient multi-level fallbacks
   const startCamera = useCallback(async () => {
@@ -373,6 +385,11 @@ export const ScannerView: React.FC = () => {
 
     if (activeSession.pin && pinInput.trim() !== activeSession.pin) {
       setPinError('Incorrect session PIN. Please verify with your laboratory coordinator.');
+      return;
+    }
+
+    if (!currentUser) {
+      setPinError('Please sign in to verify session PIN.');
       return;
     }
 

@@ -83,6 +83,7 @@ interface AppContextValue {
   currentRole: UserRole;
   currentUser: User;
   firebaseUser: FirebaseUser | null;
+  authLoading: boolean;
   isCloudConnected: boolean;
   students: User[];
   sessions: LabSession[];
@@ -124,6 +125,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [state, setState] = useState<AppState>(() => loadStoredState());
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
 
   // Keep state synced with localStorage as offline/fast cache
@@ -158,7 +160,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           currentUser: profile,
           currentRole: profile.role,
         }));
+      } else if (!fbUser) {
+        setState(prev => ({
+          ...prev,
+          currentUser: null as any,
+        }));
       }
+      setAuthLoading(false);
     });
 
     // Seed Firestore if empty
@@ -420,7 +428,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newSession: LabSession = {
       ...data,
       id,
-      coordinatorId: state.currentUser.id,
+      coordinatorId: state.currentUser?.id || 'coord-admin',
       status: 'scheduled',
       pin: Math.floor(1000 + Math.random() * 9000).toString(),
       qrCode: `SESSION-${data.courseCode || 'LAB'}-${Date.now().toString().slice(-4)}`,
@@ -438,7 +446,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     addToast(`Session "${newSession.title}" scheduled successfully`, 'success', 'Session Created');
     return newSession;
-  }, [state.currentUser.id, addToast]);
+  }, [state.currentUser?.id, addToast]);
 
   const updateSessionStatus = useCallback((sessionId: string, status: SessionStatus) => {
     setState(prev => ({
@@ -471,14 +479,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         recordToSave = {
           ...existing,
           status,
-          updatedBy: prev.currentUser.id,
+          updatedBy: prev.currentUser?.id || 'admin',
           note: reason,
           checkedInAt: existing.checkedInAt || (status === 'present' || status === 'late' ? now : undefined),
           audit: [
             ...existing.audit,
             {
               at: now,
-              actorId: prev.currentUser.id,
+              actorId: prev.currentUser?.id || 'admin',
               action: `Manual status change: ${existing.status} -> ${status}`,
               reason,
             },
@@ -492,12 +500,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           studentId,
           status,
           checkedInAt: (status === 'present' || status === 'late') ? now : undefined,
-          updatedBy: prev.currentUser.id,
+          updatedBy: prev.currentUser?.id || 'admin',
           note: reason,
           audit: [
             {
               at: now,
-              actorId: prev.currentUser.id,
+              actorId: prev.currentUser?.id || 'admin',
               action: `Manual attendance recorded: ${status.toUpperCase()}`,
               reason,
             },
@@ -566,7 +574,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 ...rec.audit,
                 {
                   at: new Date().toISOString(),
-                  actorId: prev.currentUser.id,
+                  actorId: prev.currentUser?.id || 'admin',
                   action: `Correction approved (${correction.requestedStatus})`,
                   reason: correction.reason,
                 },
@@ -639,9 +647,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       throw new Error('Switch to a coordinator account to create an onboarding link.');
     }
 
-    // If using the local demo coordinator profile (Dr. Elena Vance) or unauthenticated
-    if (!firebaseUser || state.currentUser.id === 'user-coord-1') {
-      return createDemoCoordinatorInvite(state.currentUser.id);
+    // If using local coordinator profile or unauthenticated
+    if (!firebaseUser || state.currentUser?.id === 'user-coord-1') {
+      return createDemoCoordinatorInvite(state.currentUser?.id || 'coord-1');
     }
 
     // Try creating via Firestore BaaS
@@ -724,6 +732,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentRole: state.currentRole,
         currentUser: state.currentUser,
         firebaseUser,
+        authLoading,
         isCloudConnected,
         students: state.students,
         sessions: state.sessions,

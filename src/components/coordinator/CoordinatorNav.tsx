@@ -107,18 +107,18 @@ export const CoordinatorNav: React.FC = () => {
                 overflow: 'hidden',
               }}
             >
-              {currentUser.avatarUrl ? (
-                <img src={currentUser.avatarUrl} alt={currentUser.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {currentUser?.avatarUrl ? (
+                <img src={currentUser.avatarUrl} alt={currentUser.name || 'Coordinator'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                'EV'
+                (currentUser?.name || 'EV').split(' ').map(n => n[0]).join('')
               )}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {currentUser.name}
+                {currentUser?.name || 'Coordinator'}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {currentUser.level || 'Coordinator'}
+                {currentUser?.level || 'Faculty'}
               </div>
             </div>
           </div>

@@ -46,7 +46,7 @@ export const AttendanceOverview: React.FC<AttendanceOverviewProps> = ({ metrics 
           <div>
             <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', fontWeight: 500 }}>Overall Attendance</div>
             <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-ink-900)' }}>
-              {metrics.rate}% Standing
+              {metrics.total > 0 ? `${metrics.rate}% Standing` : 'No Records Yet'}
             </div>
           </div>
         </div>
@@ -55,13 +55,13 @@ export const AttendanceOverview: React.FC<AttendanceOverviewProps> = ({ metrics 
             style={{
               fontSize: '11px',
               fontWeight: 600,
-              color: metrics.rate >= 75 ? 'var(--color-success-700)' : 'var(--color-danger-700)',
-              backgroundColor: metrics.rate >= 75 ? 'var(--color-success-100)' : '#FDECEE',
+              color: metrics.total === 0 ? 'var(--color-ink-500)' : metrics.rate >= 75 ? 'var(--color-success-700)' : 'var(--color-danger-700)',
+              backgroundColor: metrics.total === 0 ? 'rgba(0,0,0,0.05)' : metrics.rate >= 75 ? 'var(--color-success-100)' : '#FDECEE',
               padding: '2px 8px',
               borderRadius: 'var(--radius-pill)',
             }}
           >
-            {metrics.rate >= 75 ? 'Good Standing' : 'Below 75% Target'}
+            {metrics.total === 0 ? 'Fresh Record' : metrics.rate >= 75 ? 'Good Standing' : 'Below 75% Target'}
           </span>
         </div>
       </div>

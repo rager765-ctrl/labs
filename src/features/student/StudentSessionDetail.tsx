@@ -15,7 +15,7 @@ export const StudentSessionDetail: React.FC = () => {
   const [reason, setReason] = useState('');
 
   const session = sessions.find(s => s.id === sessionId);
-  const studentRecord = session
+  const studentRecord = (session && currentUser)
     ? attendanceRecords.find(r => r.sessionId === session.id && r.studentId === currentUser.id)
     : undefined;
   const correction = studentRecord ? corrections.find(c => c.recordId === studentRecord.id) : undefined;
@@ -36,7 +36,9 @@ export const StudentSessionDetail: React.FC = () => {
   const isCheckedOut = !!studentRecord?.checkedOutAt;
 
   const handleCheckout = () => {
-    checkOutStudent(session.id, currentUser.id);
+    if (session && currentUser) {
+      checkOutStudent(session.id, currentUser.id);
+    }
   };
 
   const handleSubmitCorrection = (e: React.FormEvent) => {

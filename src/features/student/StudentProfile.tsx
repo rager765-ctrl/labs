@@ -66,17 +66,17 @@ export const StudentProfile: React.FC = () => {
                 flexShrink: 0,
               }}
             >
-              {currentUser.avatarUrl ? (
-                <img src={currentUser.avatarUrl} alt={currentUser.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {currentUser?.avatarUrl ? (
+                <img src={currentUser.avatarUrl} alt={currentUser.name || 'Student'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                'AC'
+                (currentUser?.name || 'ST').split(' ').map(n => n[0]).join('')
               )}
             </div>
 
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <h2 style={{ fontSize: '17px', fontWeight: 700, color: 'var(--color-ink-900)', margin: 0 }}>
-                  {currentUser.name}
+                  {currentUser?.name || 'Student Account'}
                 </h2>
                 <span
                   style={{
@@ -92,10 +92,10 @@ export const StudentProfile: React.FC = () => {
                 </span>
               </div>
               <div style={{ fontSize: '12px', color: 'var(--color-brand-600)', fontWeight: 600, marginTop: '2px' }}>
-                ID: {currentUser.studentId}
+                ID: {currentUser?.studentId || 'STU-ONLINE'}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--color-ink-500)', marginTop: '2px' }}>
-                {currentUser.email}
+                {currentUser?.email || 'student@university.edu'}
               </div>
             </div>
           </div>
@@ -113,11 +113,11 @@ export const StudentProfile: React.FC = () => {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--color-ink-500)' }}>Academic Programme:</span>
-              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser.programme}</strong>
+              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser?.programme || 'Undergraduate Sciences'}</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--color-ink-500)' }}>Level / Year:</span>
-              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser.level}</strong>
+              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser?.level || 'Active Student'}</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--color-ink-500)' }}>Verification Status:</span>

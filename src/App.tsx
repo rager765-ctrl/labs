@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import { ToastContainer } from './components/common/ToastContainer';
 import { NotFound } from './components/common/NotFound';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 // Auth screens
 import { LoginPage } from './features/auth/LoginPage';
@@ -28,15 +29,25 @@ import { CoordinatorReports } from './features/coordinator/CoordinatorReports';
 import { CoordinatorProfile } from './features/coordinator/CoordinatorProfile';
 
 const AppContent: React.FC = () => {
-  const { currentRole } = useApp();
+  const { currentRole, currentUser, authLoading } = useApp();
 
   return (
     <>
       <ToastContainer />
 
       <Routes>
-        {/* Default Landing: Redirect to active role dashboard */}
-        <Route path="/" element={<Navigate to={currentRole === 'student' ? '/student' : '/coordinator'} replace />} />
+        {/* Default Landing: Redirect to active role dashboard or login */}
+        <Route
+          path="/"
+          element={
+            authLoading ? null : (
+              <Navigate
+                to={currentUser ? (currentRole === 'student' ? '/student' : '/coordinator') : '/login'}
+                replace
+              />
+            )
+          }
+        />
 
         {/* Auth Routes */}
         <Route path="/login" element={<LoginPage />} />
@@ -71,9 +82,11 @@ const AppContent: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <BrowserRouter>
-      <AppProvider>
-        <AppContent />
-      </AppProvider>
+      <ErrorBoundary>
+        <AppProvider>
+          <AppContent />
+        </AppProvider>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 };

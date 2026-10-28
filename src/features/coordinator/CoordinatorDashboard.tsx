@@ -49,8 +49,8 @@ export const CoordinatorDashboard: React.FC = () => {
     return new Date(s.startsAt).toDateString() === todayStr && (r.status === 'present' || r.status === 'late');
   });
 
-  const totalPossibleToday = todaySessions.reduce((acc, curr) => acc + curr.eligibleStudentIds.length, 0);
-  const overallRate = totalPossibleToday > 0 ? Math.round((todayRecords.length / totalPossibleToday) * 100) : 88;
+  const totalPossibleToday = todaySessions.reduce((acc, curr) => acc + (curr.eligibleStudentIds?.length || 0), 0);
+  const overallRate = totalPossibleToday > 0 ? Math.round((todayRecords.length / totalPossibleToday) * 100) : 0;
 
   const handleStartSession = (sessionId: string) => {
     updateSessionStatus(sessionId, 'live');
@@ -97,7 +97,7 @@ export const CoordinatorDashboard: React.FC = () => {
               Laboratory Operational Overview
             </div>
             <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-ink-900)', margin: '2px 0 0 0' }}>
-              Welcome, {currentUser.name.split(' ')[0]} 👋
+              Welcome, {(currentUser?.name || 'Coordinator').split(' ')[0]} 👋
             </h1>
             <p style={{ fontSize: '12px', color: 'var(--color-ink-500)', margin: '2px 0 0 0' }}>
               {new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
@@ -180,7 +180,7 @@ export const CoordinatorDashboard: React.FC = () => {
             <div>
               <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', fontWeight: 600 }}>ENROLLED COHORT</div>
               <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-ink-900)', lineHeight: '26px' }}>
-                {totalStudents * 4} <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-ink-500)' }}>students</span>
+                {totalStudents} <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-ink-500)' }}>students</span>
               </div>
             </div>
           </div>
@@ -402,49 +402,58 @@ export const CoordinatorDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Attendance Trend (Accessible Pure CSS Bar Chart) */}
+          {/* Attendance Trend */}
           <div className="card" style={{ padding: '20px' }}>
             <h2 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 4px 0' }}>
-              Attendance Trend (Recent Weeks)
+              Attendance Trend & Participation
             </h2>
             <p style={{ fontSize: '12px', color: 'var(--color-ink-500)', margin: '0 0 20px 0' }}>
-              Average lab participation rate across computing modules.
+              Overall practical session attendance across active laboratory modules.
             </p>
 
-            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: '160px', padding: '0 10px', gap: '12px' }}>
-              {[
-                { week: 'W1', rate: 94, present: 32, total: 34 },
-                { week: 'W2', rate: 91, present: 31, total: 34 },
-                { week: 'W3', rate: 85, present: 29, total: 34 },
-                { week: 'W4', rate: 88, present: 30, total: 34 },
-                { week: 'W5', rate: 79, present: 27, total: 34 },
-                { week: 'Today', rate: 92, present: 31, total: 34, current: true },
-              ].map(bar => (
-                <div key={bar.week} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flex: 1 }}>
-                  <span style={{ fontSize: '10px', fontWeight: 700, color: bar.current ? 'var(--color-brand-700)' : 'var(--color-ink-700)' }}>
-                    {bar.rate}%
-                  </span>
-                  <div
-                    style={{
-                      width: '100%',
-                      maxWidth: '36px',
-                      height: `${(bar.rate / 100) * 120}px`,
-                      backgroundColor: bar.current ? 'var(--color-brand-600)' : 'var(--color-brand-100)',
-                      borderRadius: 'var(--radius-xs) var(--radius-xs) 0 0',
-                      transition: 'height 0.3s ease',
-                    }}
-                    title={`${bar.week}: ${bar.rate}% (${bar.present}/${bar.total})`}
-                  />
-                  <span style={{ fontSize: '11px', color: bar.current ? 'var(--color-brand-700)' : 'var(--color-ink-500)', fontWeight: bar.current ? 700 : 500 }}>
-                    {bar.week}
-                  </span>
+            {attendanceRecords.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--color-ink-500)', fontSize: '13px' }}>
+                <TrendingUp size={32} color="var(--color-brand-400)" style={{ margin: '0 auto 10px', opacity: 0.6 }} />
+                <div style={{ fontWeight: 600, color: 'var(--color-ink-700)' }}>No Attendance Records Yet</div>
+                <div style={{ fontSize: '11px', marginTop: '4px' }}>Real-time participation metrics will populate as students check in to lab practicals.</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: '160px', padding: '0 10px', gap: '12px' }}>
+                  {sessions.slice(0, 6).map((sess) => {
+                    const sessRecs = attendanceRecords.filter(r => r.sessionId === sess.id);
+                    const presentCount = sessRecs.filter(r => r.status === 'present' || r.status === 'late').length;
+                    const totalExpected = sess.eligibleStudentIds?.length || (sessRecs.length > 0 ? sessRecs.length : 1);
+                    const rate = totalExpected > 0 ? Math.round((presentCount / totalExpected) * 100) : 0;
+                    return (
+                      <div key={sess.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flex: 1 }}>
+                        <span style={{ fontSize: '10px', fontWeight: 700, color: sess.status === 'live' ? 'var(--color-brand-700)' : 'var(--color-ink-700)' }}>
+                          {rate}%
+                        </span>
+                        <div
+                          style={{
+                            width: '100%',
+                            maxWidth: '36px',
+                            height: `${Math.max(8, (rate / 100) * 120)}px`,
+                            backgroundColor: sess.status === 'live' ? 'var(--color-brand-600)' : 'var(--color-brand-100)',
+                            borderRadius: 'var(--radius-xs) var(--radius-xs) 0 0',
+                            transition: 'height 0.3s ease',
+                          }}
+                          title={`${sess.courseCode}: ${rate}% (${presentCount}/${totalExpected})`}
+                        />
+                        <span style={{ fontSize: '11px', color: sess.status === 'live' ? 'var(--color-brand-700)' : 'var(--color-ink-500)', fontWeight: sess.status === 'live' ? 700 : 500 }}>
+                          {sess.courseCode || 'LAB'}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
 
-            <div style={{ marginTop: '16px', padding: '10px 12px', backgroundColor: 'var(--color-brand-50)', borderRadius: 'var(--radius-xs)', fontSize: '11px', color: 'var(--color-ink-700)' }}>
-              Target attendance policy minimum: <strong>75%</strong>. All active modules currently exceed threshold requirements.
-            </div>
+                <div style={{ marginTop: '16px', padding: '10px 12px', backgroundColor: 'var(--color-brand-50)', borderRadius: 'var(--radius-xs)', fontSize: '11px', color: 'var(--color-ink-700)' }}>
+                  Target attendance policy minimum: <strong>75%</strong>.
+                </div>
+              </>
+            )}
           </div>
         </div>
       </main>

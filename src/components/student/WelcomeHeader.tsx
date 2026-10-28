@@ -3,7 +3,7 @@ import type { User } from '../../types';
 import { Sparkles, Bell } from 'lucide-react';
 
 interface WelcomeHeaderProps {
-  user: User;
+  user?: User | null;
   onOpenNotifications?: () => void;
 }
 
@@ -78,14 +78,14 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifi
               boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
             }}
           >
-            {user.avatarUrl ? (
+            {user?.avatarUrl ? (
               <img
                 src={user.avatarUrl}
-                alt={user.name}
+                alt={user.name || 'User'}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              user.name.split(' ').map(n => n[0]).join('')
+              (user?.name || 'Student').split(' ').map(n => n[0]).join('')
             )}
           </div>
           <div>
@@ -101,7 +101,7 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifi
                 color: '#FFFFFF',
               }}
             >
-              Hi, {user.name.split(' ')[0]} 👋
+              Hi, {(user?.name || 'Student').split(' ')[0]} 👋
             </h1>
           </div>
         </div>
