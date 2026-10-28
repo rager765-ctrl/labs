@@ -14,6 +14,7 @@ import {
   createInitialAttendanceRecords,
   createInitialCorrections,
   MOCK_STUDENTS,
+  CURRENT_COORDINATOR,
 } from './mockData';
 
 // Firestore Collection Names
@@ -22,6 +23,7 @@ export const ATTENDANCE_COLLECTION = 'attendance';
 export const CORRECTIONS_COLLECTION = 'corrections';
 export const USERS_COLLECTION = 'users';
 export const COORDINATOR_INVITES_COLLECTION = 'coordinatorInvites';
+export const DEMO_INVITES_STORAGE_KEY = 'attendance_demo_coordinator_invites';
 
 export interface CoordinatorInvite {
   token: string;
@@ -30,6 +32,35 @@ export interface CoordinatorInvite {
   expiresAt: Timestamp;
   usedBy: string | null;
 }
+
+export const getStoredDemoInvites = (): Record<string, CoordinatorInvite> => {
+  try {
+    const raw = localStorage.getItem(DEMO_INVITES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+export const createDemoCoordinatorInvite = (createdBy: string = 'user-coord-1'): CoordinatorInvite => {
+  const token = `demo-${crypto.randomUUID()}`;
+  const createdAt = Date.now();
+  const invite: CoordinatorInvite = {
+    token,
+    createdBy,
+    createdAt,
+    expiresAt: Timestamp.fromMillis(createdAt + 7 * 24 * 60 * 60 * 1000),
+    usedBy: null,
+  };
+  try {
+    const all = getStoredDemoInvites();
+    all[token] = invite;
+    localStorage.setItem(DEMO_INVITES_STORAGE_KEY, JSON.stringify(all));
+  } catch (err) {
+    console.error('Failed to store demo invite in localStorage', err);
+  }
+  return invite;
+};
 
 export const createCoordinatorInvite = async (createdBy: string): Promise<CoordinatorInvite> => {
   const token = crypto.randomUUID();
@@ -164,6 +195,7 @@ export const seedFirestoreIfEmpty = async (): Promise<boolean> => {
       for (const u of MOCK_STUDENTS) {
         await setDoc(doc(db, USERS_COLLECTION, u.id), u);
       }
+      await setDoc(doc(db, USERS_COLLECTION, CURRENT_COORDINATOR.id), CURRENT_COORDINATOR);
 
       return true;
     }

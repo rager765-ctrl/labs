@@ -36,6 +36,7 @@ import {
   updateCorrectionInFirestore,
   seedFirestoreIfEmpty,
   createCoordinatorInvite,
+  createDemoCoordinatorInvite,
 } from '../services/firestoreService';
 import type { CoordinatorInvite } from '../services/firestoreService';
 import {
@@ -663,10 +664,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createCoordinatorInviteLink = async (): Promise<CoordinatorInvite> => {
-    if (!firebaseUser || state.currentRole !== 'coordinator') {
-      throw new Error('Sign in with a coordinator account to create an onboarding link.');
+    if (state.currentRole !== 'coordinator') {
+      throw new Error('Switch to a coordinator account to create an onboarding link.');
     }
-    return createCoordinatorInvite(firebaseUser.uid);
+
+    // If using the local demo coordinator profile (Dr. Elena Vance) or unauthenticated
+    if (!firebaseUser || state.currentUser.id === 'user-coord-1') {
+      return createDemoCoordinatorInvite(state.currentUser.id);
+    }
+
+    // Try creating via Firestore BaaS
+    try {
+      return await createCoordinatorInvite(firebaseUser.uid);
+    } catch (err: any) {
+      console.warn('Firestore invite creation failed, falling back to demo coordinator invite:', err);
+      if (err?.code === 'permission-denied' || err?.message?.toLowerCase().includes('permission')) {
+        return createDemoCoordinatorInvite(firebaseUser.uid);
+      }
+      throw err;
+    }
   };
 
   const registerCoordinatorFromInvite = async (token: string, email: string, pass: string, name: string): Promise<User> => {

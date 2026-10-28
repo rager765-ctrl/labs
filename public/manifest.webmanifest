@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "LabAttend | Laboratory Attendance",
+  "short_name": "LabAttend",
+  "description": "Manage laboratory sessions and attendance.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fc",
+  "theme_color": "#863bff",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

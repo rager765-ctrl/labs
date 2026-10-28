@@ -4,14 +4,18 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  min-width: 0;
 }
 
 html, body {
   height: 100%;
   width: 100%;
+  max-width: 100%;
   background-color: var(--color-brand-50);
   color: var(--color-ink-900);
   font-family: var(--font-ui);
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
@@ -19,8 +23,39 @@ html, body {
 
 #root {
   min-height: 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow-x: clip;
+}
+
+/* Keep long labels and identifiers inside cards and flexible layouts. */
+.card,
+.coordinator-layout,
+.coordinator-main,
+#root > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+#root :where(p, h1, h2, h3, h4, label, span, a, td, th) {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+@media (max-width: 767px) {
+  .card {
+    width: 100%;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
 }
 
 /* Typography Helpers */
@@ -45,6 +80,11 @@ html, body {
 }
 
 /* Common Button Styles */
+button,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -64,6 +104,7 @@ html, body {
   transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
   text-decoration: none;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -72,7 +113,7 @@ html, body {
 }
 
 .btn-primary:active:not(:disabled) {
-  transform: translateY(0);
+  transform: none;
 }
 
 .btn-primary:disabled {
@@ -124,10 +165,28 @@ html, body {
   color: var(--color-brand-700);
   cursor: pointer;
   transition: background-color 0.15s ease, transform 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-icon:hover {
   background-color: #ccd9fc;
+}
+
+button:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+@media (hover: none) {
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--color-brand-700);
+    transform: none;
+  }
+
+  .btn-secondary:hover:not(:disabled),
+  .btn-icon:hover {
+    background-color: var(--color-brand-100);
+  }
 }
 
 /* Common Card */
