@@ -94,7 +94,7 @@ export const CoordinatorDashboard: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <div style={{ fontSize: '11px', color: 'var(--color-brand-700)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Laboratory Operational Overview
+              Innovations Lab Overview
             </div>
             <h1
               style={{
@@ -188,9 +188,9 @@ export const CoordinatorDashboard: React.FC = () => {
               <Users size={20} />
             </div>
             <div>
-              <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', fontWeight: 600 }}>ENROLLED COHORT</div>
+              <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', fontWeight: 600 }}>REGISTERED VISITORS</div>
               <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-ink-900)', lineHeight: '26px' }}>
-                {totalStudents} <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-ink-500)' }}>students</span>
+                {totalStudents} <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-ink-500)' }}>people</span>
               </div>
             </div>
           </div>
@@ -214,7 +214,7 @@ export const CoordinatorDashboard: React.FC = () => {
             <div>
               <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', fontWeight: 600 }}>RECORDED TODAY</div>
               <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-ink-900)', lineHeight: '26px' }}>
-                {todayRecords.length} <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-ink-500)' }}>check-ins</span>
+                {todayRecords.length} <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-ink-500)' }}>visits</span>
               </div>
             </div>
           </div>
@@ -288,10 +288,10 @@ export const CoordinatorDashboard: React.FC = () => {
               <AlertTriangle size={20} color="var(--color-warning-700)" style={{ flexShrink: 0 }} />
               <div>
                 <strong style={{ fontSize: '13px', color: 'var(--color-warning-700)' }}>
-                  {pendingCorrections.length} Student Correction Request awaiting review
+                  {pendingCorrections.length} Attendance Correction Request awaiting review
                 </strong>
                 <div style={{ fontSize: '12px', color: '#78350F' }}>
-                  Students have submitted attendance dispute notices with official justifications.
+                  Attendees have submitted attendance corrections for coordinator review.
                 </div>
               </div>
             </div>
@@ -318,11 +318,11 @@ export const CoordinatorDashboard: React.FC = () => {
 
         {/* 2-Column Section: Today's Sessions & Attendance Trend */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-          {/* Today's Lab Sessions */}
+          {/* Today's meeting sessions */}
           <div className="card" style={{ padding: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
-                Today's Laboratory Schedule
+                Today's Meeting Schedule
               </h2>
               <button
                 onClick={() => navigate('/coordinator/sessions')}
@@ -357,7 +357,7 @@ export const CoordinatorDashboard: React.FC = () => {
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
                         <div>
                           <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-brand-600)' }}>
-                            {session.courseCode}
+                            {session.labName || session.room}
                           </div>
                           <h3
                             onClick={() => navigate(`/coordinator/sessions/${session.id}`)}
@@ -418,14 +418,14 @@ export const CoordinatorDashboard: React.FC = () => {
               Attendance Trend & Participation
             </h2>
             <p style={{ fontSize: '12px', color: 'var(--color-ink-500)', margin: '0 0 20px 0' }}>
-              Overall practical session attendance across active laboratory modules.
+              Overall attendance across Innovations Lab meeting sessions.
             </p>
 
             {attendanceRecords.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--color-ink-500)', fontSize: '13px' }}>
                 <TrendingUp size={32} color="var(--color-brand-400)" style={{ margin: '0 auto 10px', opacity: 0.6 }} />
                 <div style={{ fontWeight: 600, color: 'var(--color-ink-700)' }}>No Attendance Records Yet</div>
-                <div style={{ fontSize: '11px', marginTop: '4px' }}>Real-time participation metrics will populate as students check in to lab practicals.</div>
+                <div style={{ fontSize: '11px', marginTop: '4px' }}>Attendance metrics update as visitors check in and out.</div>
               </div>
             ) : (
               <>
@@ -449,10 +449,10 @@ export const CoordinatorDashboard: React.FC = () => {
                             borderRadius: 'var(--radius-xs) var(--radius-xs) 0 0',
                             transition: 'height 0.3s ease',
                           }}
-                          title={`${sess.courseCode}: ${rate}% (${presentCount}/${totalExpected})`}
+                          title={`${sess.title}: ${rate}% (${presentCount}/${totalExpected})`}
                         />
                         <span style={{ fontSize: '11px', color: sess.status === 'live' ? 'var(--color-brand-700)' : 'var(--color-ink-500)', fontWeight: sess.status === 'live' ? 700 : 500 }}>
-                          {sess.courseCode || 'LAB'}
+                          {sess.title}
                         </span>
                       </div>
                     );

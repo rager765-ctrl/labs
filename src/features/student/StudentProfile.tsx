@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { StudentBottomNav } from '../../components/student/StudentBottomNav';
-import { Bell, Check, LogOut, LogIn, UserPlus, User, Mail, IdCard, GraduationCap, Layers, Pencil, X, Save, HelpCircle } from 'lucide-react';
-import { AuthField, AuthSelect } from '../auth/AuthComponents';
-import { LEVELS, PROGRAMMES } from '../auth/SignupPage';
+import { Bell, Check, LogOut, LogIn, UserPlus, User, Mail, IdCard, Pencil, X, Save, HelpCircle } from 'lucide-react';
+import { AuthField } from '../auth/AuthComponents';
+import { ThemeToggle } from '../../components/common/ThemeToggle';
 
 export const StudentProfile: React.FC = () => {
   const navigate = useNavigate();
@@ -17,8 +17,6 @@ export const StudentProfile: React.FC = () => {
     name: currentUser?.name || '',
     email: currentUser?.email || '',
     studentId: currentUser?.studentId || '',
-    programme: currentUser?.programme || '',
-    level: currentUser?.level || '',
   });
 
   useEffect(() => {
@@ -26,8 +24,6 @@ export const StudentProfile: React.FC = () => {
       name: currentUser?.name || '',
       email: currentUser?.email || '',
       studentId: currentUser?.studentId || '',
-      programme: currentUser?.programme || '',
-      level: currentUser?.level || '',
     });
   }, [currentUser]);
 
@@ -42,8 +38,6 @@ export const StudentProfile: React.FC = () => {
         name: currentUser?.name || '',
         email: currentUser?.email || '',
         studentId: currentUser?.studentId || '',
-        programme: currentUser?.programme || '',
-        level: currentUser?.level || '',
       });
     }
     setEditingProfile(value => !value);
@@ -52,8 +46,8 @@ export const StudentProfile: React.FC = () => {
 
   const saveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (profile.name.trim().length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email.trim()) || !/^[A-Za-z0-9-]{4,}$/.test(profile.studentId.trim()) || !profile.programme || !profile.level) {
-      setProfileError('Complete each required field with a valid name, email, and student ID.');
+    if (profile.name.trim().length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email.trim()) || !/^[A-Za-z0-9-]{4,}$/.test(profile.studentId.trim())) {
+      setProfileError('Enter a valid name, email, and member or visitor ID.');
       return;
     }
     setSavingProfile(true);
@@ -63,8 +57,6 @@ export const StudentProfile: React.FC = () => {
         name: profile.name.trim(),
         email: profile.email.trim(),
         studentId: profile.studentId.trim().toUpperCase(),
-        programme: profile.programme,
-        level: profile.level,
       });
       setEditingProfile(false);
       addToast('Profile details updated', 'success');
@@ -83,6 +75,7 @@ export const StudentProfile: React.FC = () => {
 
   return (
     <div
+      className="app-page-shell"
       style={{
         minHeight: '100vh',
         backgroundColor: 'var(--color-brand-50)',
@@ -101,7 +94,7 @@ export const StudentProfile: React.FC = () => {
         }}
       >
         <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-ink-900)', margin: '0 0 4px 0' }}>
-          Student Profile
+          Attendee Profile
         </h1>
 
         {/* Student ID Card */}
@@ -118,7 +111,7 @@ export const StudentProfile: React.FC = () => {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '14px' }}>
-            <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0 }}>Student ID Card</h2>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0 }}>Attendee ID Card</h2>
             <button type="button" className="btn-secondary" onClick={toggleProfileEditor} style={{ height: '36px', padding: '0 12px', gap: '6px' }}>
               {editingProfile ? <X size={15} /> : <Pencil size={15} />}
               <span>{editingProfile ? 'Cancel' : 'Edit details'}</span>
@@ -128,12 +121,8 @@ export const StudentProfile: React.FC = () => {
             <form onSubmit={saveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '14px', borderRadius: 'var(--radius-sm)', background: 'var(--color-brand-50)' }} noValidate>
               <AuthField id="profile-name" label="Full name" autoComplete="name" placeholder="e.g. Alex Chen" icon={<User size={18} />} value={profile.name} onChange={event => updateField('name', event.target.value)} required />
               <div className="auth-row auth-row--2">
-                <AuthField id="profile-email" label="University email" type="email" autoComplete="email" inputMode="email" placeholder="you@university.edu" icon={<Mail size={18} />} value={profile.email} onChange={event => updateField('email', event.target.value)} required />
-                <AuthField id="profile-student-id" label="Student ID" placeholder="STU-2024-8891" autoComplete="off" icon={<IdCard size={18} />} value={profile.studentId} onChange={event => updateField('studentId', event.target.value.toUpperCase())} required />
-              </div>
-              <div className="auth-row auth-row--2">
-                <AuthSelect id="profile-programme" label="Programme" icon={<GraduationCap size={18} />} placeholder="Select programme" options={PROGRAMMES} value={profile.programme} onChange={event => updateField('programme', event.target.value)} required />
-                <AuthSelect id="profile-level" label="Level" icon={<Layers size={18} />} placeholder="Select level" options={LEVELS} value={profile.level} onChange={event => updateField('level', event.target.value)} required />
+                <AuthField id="profile-email" label="Email" type="email" autoComplete="email" inputMode="email" placeholder="you@example.com" icon={<Mail size={18} />} value={profile.email} onChange={event => updateField('email', event.target.value)} required />
+                <AuthField id="profile-student-id" label="Member / Visitor ID" placeholder="LAB-2048" autoComplete="off" icon={<IdCard size={18} />} value={profile.studentId} onChange={event => updateField('studentId', event.target.value.toUpperCase())} required />
               </div>
               {profileError && <p role="alert" style={{ color: 'var(--color-danger-700)', fontSize: '12px', margin: 0 }}>{profileError}</p>}
               <button type="submit" className="btn-primary" disabled={savingProfile} style={{ alignSelf: 'flex-start', gap: '7px' }}>
@@ -159,8 +148,8 @@ export const StudentProfile: React.FC = () => {
                 flexShrink: 0,
               }}
             >
-              {currentUser?.avatarUrl ? (
-                <img src={currentUser.avatarUrl} alt={currentUser.name || 'Student'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {currentUser?.avatarUrl ? (
+                <img src={currentUser.avatarUrl} alt={currentUser.name || 'Attendee'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 (currentUser?.name || 'ST').split(' ').map(n => n[0]).join('')
               )}
@@ -169,7 +158,7 @@ export const StudentProfile: React.FC = () => {
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <h2 style={{ fontFamily: 'var(--font-display, "Squada One", sans-serif)', fontSize: '20px', fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase', color: 'var(--color-ink-900)', margin: 0 }}>
-                  {currentUser?.name || 'Student Account'}
+                  {currentUser?.name || 'Attendee Account'}
                 </h2>
                 <span
                   style={{
@@ -181,14 +170,14 @@ export const StudentProfile: React.FC = () => {
                     borderRadius: 'var(--radius-pill)',
                   }}
                 >
-                  STUDENT
+                  ATTENDEE
                 </span>
               </div>
               <div style={{ fontSize: '12px', color: 'var(--color-brand-600)', fontWeight: 600, marginTop: '2px' }}>
-                ID: {currentUser?.studentId || 'STU-ONLINE'}
+                ID: {currentUser?.studentId || 'VISITOR'}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--color-ink-500)', marginTop: '2px' }}>
-                {currentUser?.email || 'student@university.edu'}
+                {currentUser?.email || 'attendee@example.com'}
               </div>
             </div>
           </div>
@@ -205,14 +194,6 @@ export const StudentProfile: React.FC = () => {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--color-ink-500)' }}>Academic Programme:</span>
-              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser?.programme || 'Undergraduate Sciences'}</strong>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--color-ink-500)' }}>Level / Year:</span>
-              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser?.level || 'Active Student'}</strong>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--color-ink-500)' }}>Verification Status:</span>
               <span style={{ color: 'var(--color-success-700)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                 <Check size={13} strokeWidth={2.5} /> Campus Verified
@@ -220,6 +201,8 @@ export const StudentProfile: React.FC = () => {
             </div>
           </div>
         </div>
+
+        <ThemeToggle />
 
         {/* Notification Preferences */}
         <div
@@ -241,7 +224,7 @@ export const StudentProfile: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 600 }}>Lab Session Reminders</div>
+                <div style={{ fontSize: '13px', fontWeight: 600 }}>Meeting Session Reminders</div>
                 <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>Notify 15 minutes before check-in opens</div>
               </div>
               <input
@@ -374,7 +357,7 @@ export const StudentProfile: React.FC = () => {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <p style={{ fontSize: '12px', color: 'var(--color-ink-500)', margin: '0 0 4px 0' }}>
-                You are currently viewing student mode as a simulated user. Sign in to your university student account to access your live cloud records.
+                You are viewing the attendee experience with a demo account. Sign in to access your live visit records.
               </p>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <Link
@@ -400,8 +383,8 @@ export const StudentProfile: React.FC = () => {
 
         {/* Support & Version */}
         <div style={{ textAlign: 'center', padding: '10px 0', fontSize: '11px', color: 'var(--color-ink-500)' }}>
-          <div>Attendance Platform MVP â€¢ University Lab Systems v1.0.0</div>
-          <div style={{ marginTop: '4px' }}>Complies with Laboratory Attendance Regulation 4.2</div>
+          <div>Innovations Lab Visit Tracking</div>
+          <div style={{ marginTop: '4px' }}>Arrival and departure records are stored securely.</div>
         </div>
       </div>
 

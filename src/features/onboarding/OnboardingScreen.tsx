@@ -20,7 +20,7 @@ const SLIDES: OnboardingSlide[] = [
     id: 'geofence',
     title: 'Geofenced Presence Check',
     description:
-      'Verify physical presence inside university laboratory venues automatically with real-time GPS proximity validation.',
+      'Verify arrivals at Innovations Lab meeting locations with real-time device location checks.',
     primaryImage: '/images/onboarding/geofence.jpg',
     secondaryImage: '/images/onboarding/qr-scan.jpg',
     badgeText: 'GPS Proximity',
@@ -29,16 +29,16 @@ const SLIDES: OnboardingSlide[] = [
     id: 'qr-scan',
     title: 'Instant QR & PIN Access',
     description:
-      'Scan dynamic practical session QR codes or enter encrypted session PINs in seconds with zero manual roll call delays.',
+      'Scan a meeting QR code or enter its PIN to record your arrival without a manual sign-in sheet.',
     primaryImage: '/images/onboarding/qr-scan.jpg',
     secondaryImage: '/images/onboarding/metrics.jpg',
     badgeText: 'Live Scanner',
   },
   {
     id: 'metrics',
-    title: 'Live Laboratory Oversight',
+    title: 'Live Visit Tracking',
     description:
-      'Keep track of your complete practical course attendance records, compliance ratings, and real-time coordinator audits.',
+      'Track who arrives and leaves, review attendance history, and see coordinator updates in real time.',
     primaryImage: '/images/onboarding/metrics.jpg',
     secondaryImage: '/images/onboarding/geofence.jpg',
     badgeText: 'Cloud Metrics',

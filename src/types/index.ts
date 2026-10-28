@@ -29,7 +29,6 @@ export interface GeofenceConfig {
 export interface LabSession {
   id: string;
   title: string;
-  courseCode?: string;
   labName: string;
   room: string;
   coordinatorId: string;

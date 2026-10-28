@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { StudentBottomNav } from '../../components/student/StudentBottomNav';
+import { AttendanceOverview } from '../../components/student/AttendanceOverview';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import type { AttendanceStatus } from '../../types';
-import { Search, Clock, MapPin, AlertCircle, MessageSquarePlus, ChevronRight } from 'lucide-react';
+import { Search, Clock, MapPin, AlertCircle, MessageSquarePlus, ChevronRight, ChevronDown } from 'lucide-react';
 import { formatTime, formatDate, calculateStudentAttendanceMetrics } from '../../services/storage';
 
 export const StudentHistory: React.FC = () => {
@@ -13,13 +14,14 @@ export const StudentHistory: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<AttendanceStatus | 'all'>('all');
+  const [selectedSession, setSelectedSession] = useState('all');
+  const [selectedMonth, setSelectedMonth] = useState('all');
+  const [analyticsExpanded, setAnalyticsExpanded] = useState(false);
 
   // Correction request modal state
   const [reportingRecordId, setReportingRecordId] = useState<string | null>(null);
   const [requestedStatus, setRequestedStatus] = useState<AttendanceStatus>('present');
   const [reasonInput, setReasonInput] = useState('');
-
-  const metrics = calculateStudentAttendanceMetrics(attendanceRecords, currentUser?.id || '');
 
   // Filter student's past and recorded sessions
   const studentRecords = currentUser
@@ -37,17 +39,39 @@ export const StudentHistory: React.FC = () => {
         correction,
       };
     })
-    .filter(item => item.session !== undefined)
-    .filter(item => {
-      if (selectedFilter !== 'all' && item.record.status !== selectedFilter) return false;
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase();
-      return (
-        item.session?.title.toLowerCase().includes(q) ||
-        item.session?.courseCode?.toLowerCase().includes(q) ||
-        item.session?.room.toLowerCase().includes(q)
-      );
+    .filter(item => item.session !== undefined);
+
+  const monthKey = (dateValue: string) => {
+    const date = new Date(dateValue);
+    return Number.isNaN(date.getTime()) ? '' : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  };
+  const months = Array.from(new Set(historyItems.map(({ session }) => session ? monthKey(session.startsAt) : '').filter(Boolean)))
+    .sort((a, b) => b.localeCompare(a))
+    .map(key => {
+      const [year, month] = key.split('-').map(Number);
+      return { key, label: new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(new Date(year, month - 1, 1)) };
     });
+
+  const filteredItems = historyItems.filter(item => {
+    if (selectedFilter !== 'all' && item.record.status !== selectedFilter) return false;
+    if (selectedSession !== 'all' && item.session?.id !== selectedSession) return false;
+    if (selectedMonth !== 'all' && (!item.session || monthKey(item.session.startsAt) !== selectedMonth)) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      item.session?.title.toLowerCase().includes(q) ||
+      item.session?.labName?.toLowerCase().includes(q) ||
+      item.session?.room.toLowerCase().includes(q)
+    );
+  });
+  const metrics = calculateStudentAttendanceMetrics(filteredItems.map(item => item.record), currentUser?.id || '');
+  const hasActiveFilters = !!searchQuery.trim() || selectedFilter !== 'all' || selectedSession !== 'all' || selectedMonth !== 'all';
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedFilter('all');
+    setSelectedSession('all');
+    setSelectedMonth('all');
+  };
 
   const handleOpenReportModal = (recordId: string, currentStatus: AttendanceStatus) => {
     setReportingRecordId(recordId);
@@ -65,6 +89,7 @@ export const StudentHistory: React.FC = () => {
 
   return (
     <div
+      className="app-page-shell"
       style={{
         minHeight: '100vh',
         backgroundColor: 'var(--color-brand-50)',
@@ -85,51 +110,11 @@ export const StudentHistory: React.FC = () => {
         {/* Page Header */}
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-ink-900)', margin: '0 0 4px 0' }}>
-            Attendance History
+            Attendance History &amp; Analytics
           </h1>
           <p style={{ fontSize: '13px', color: 'var(--color-ink-500)', margin: 0 }}>
-            Official university laboratory participation logs & records.
+            Review your Innovations Lab visits by meeting, month, and attendance status.
           </p>
-        </div>
-
-        {/* Rate Summary Card */}
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--color-line)',
-            padding: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            boxShadow: 'var(--shadow-card)',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-500)', textTransform: 'uppercase' }}>
-              Cumulative Attendance
-            </div>
-            <div style={{ fontSize: '26px', fontWeight: 700, color: 'var(--color-brand-700)', lineHeight: '32px' }}>
-              {metrics.rate}%
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--color-ink-700)', marginTop: '2px' }}>
-              {metrics.present} Present • {metrics.late} Late • {metrics.absent} Missed
-            </div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: metrics.rate >= 75 ? 'var(--color-success-700)' : 'var(--color-danger-700)',
-                backgroundColor: metrics.rate >= 75 ? 'var(--color-success-100)' : '#FDECEE',
-                padding: '4px 10px',
-                borderRadius: 'var(--radius-pill)',
-              }}
-            >
-              {metrics.rate >= 75 ? 'Good Standing' : 'Action Needed'}
-            </span>
-          </div>
         </div>
 
         {/* Search & Filter Bar */}
@@ -148,7 +133,7 @@ export const StudentHistory: React.FC = () => {
             <Search size={16} color="var(--color-ink-500)" style={{ marginRight: '8px' }} />
             <input
               type="text"
-              placeholder="Search course, practical, or lab room..."
+              placeholder="Search meeting title, location, or room..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
@@ -168,6 +153,31 @@ export const StudentHistory: React.FC = () => {
                 Clear
               </button>
             )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-500)' }}>
+              Meeting
+              <select
+                value={selectedSession}
+                onChange={event => setSelectedSession(event.target.value)}
+                style={{ minWidth: 0, width: '100%', height: '38px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-line)', padding: '0 9px', color: 'var(--color-ink-900)', background: '#FFFFFF', fontSize: '12px' }}
+              >
+                <option value="all">All meetings</option>
+                {Array.from(new Map(historyItems.filter(item => item.session).map(item => [item.session!.id, item.session!.title])).entries()).map(([id, title]) => <option key={id} value={id}>{title}</option>)}
+              </select>
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-500)' }}>
+              Month
+              <select
+                value={selectedMonth}
+                onChange={event => setSelectedMonth(event.target.value)}
+                style={{ minWidth: 0, width: '100%', height: '38px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-line)', padding: '0 9px', color: 'var(--color-ink-900)', background: '#FFFFFF', fontSize: '12px' }}
+              >
+                <option value="all">All months</option>
+                {months.map(month => <option key={month.key} value={month.key}>{month.label}</option>)}
+              </select>
+            </label>
           </div>
 
           {/* Filter Pills */}
@@ -199,15 +209,41 @@ export const StudentHistory: React.FC = () => {
                   transition: 'all 0.15s ease',
                 }}
               >
-                {filter === 'all' ? 'All Records' : filter}
+                {filter === 'all' ? 'All Records' : filter === 'absent' ? 'Missed' : filter}
               </button>
             ))}
           </div>
         </div>
 
+        {/* Filter-responsive attendance analytics */}
+        <section aria-label="Attendance analytics">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', minHeight: '44px', padding: '6px 10px', backgroundColor: '#FFFFFF', border: '1px solid var(--color-line)', borderRadius: 'var(--radius-sm)' }}>
+            <h2 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-ink-900)', margin: 0 }}>Attendance Analytics</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {metrics.total > 0 && <span style={{ fontSize: '11px', color: 'var(--color-brand-700)', fontWeight: 700 }}>{metrics.rate}%</span>}
+              <span aria-label={`${filteredItems.length} of ${historyItems.length} records`} title={`${filteredItems.length} of ${historyItems.length} records`} style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>{filteredItems.length}/{historyItems.length}</span>
+              {hasActiveFilters && <button type="button" onClick={clearFilters} style={{ border: 0, background: 'none', padding: 0, color: 'var(--color-brand-700)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Reset</button>}
+              <button
+                type="button"
+                className="btn-icon"
+                aria-label={analyticsExpanded ? 'Collapse attendance analytics' : 'Expand attendance analytics'}
+                aria-expanded={analyticsExpanded}
+                aria-controls="attendance-analytics-content"
+                onClick={() => setAnalyticsExpanded(value => !value)}
+                style={{ width: '30px', height: '30px', flexShrink: 0 }}
+              >
+                <ChevronDown size={16} style={{ transform: analyticsExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 180ms ease' }} />
+              </button>
+            </div>
+          </div>
+          <div id="attendance-analytics-content" hidden={!analyticsExpanded} style={{ marginTop: '8px' }}>
+            <AttendanceOverview metrics={metrics} />
+          </div>
+        </section>
+
         {/* History Records List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {historyItems.length === 0 ? (
+          {filteredItems.length === 0 ? (
             <div
               style={{
                 padding: '36px 20px',
@@ -224,9 +260,9 @@ export const StudentHistory: React.FC = () => {
               <div style={{ fontSize: '12px', color: 'var(--color-ink-500)', marginTop: '4px' }}>
                 Try adjusting your search query or reset status filters.
               </div>
-              {(searchQuery || selectedFilter !== 'all') && (
+              {hasActiveFilters && (
                 <button
-                  onClick={() => { setSearchQuery(''); setSelectedFilter('all'); }}
+                  onClick={clearFilters}
                   className="btn-secondary"
                   style={{ height: '36px', marginTop: '14px', fontSize: '12px' }}
                 >
@@ -235,7 +271,7 @@ export const StudentHistory: React.FC = () => {
               )}
             </div>
           ) : (
-            historyItems.map(({ record, session, correction }) => {
+            filteredItems.map(({ record, session, correction }) => {
               if (!session) return null;
               return (
                 <div
@@ -251,11 +287,11 @@ export const StudentHistory: React.FC = () => {
                     boxShadow: 'var(--shadow-card)',
                   }}
                 >
-                  {/* Top line: Course & Status */}
+                  {/* Top line: Meeting & Status */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
                     <div>
                       <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-brand-600)' }}>
-                        {session.courseCode}
+                        {session.labName}
                       </span>
                       <h2
                         onClick={() => navigate(`/student/sessions/${session.id}`)}
@@ -277,7 +313,7 @@ export const StudentHistory: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '11px', color: 'var(--color-ink-700)', flexWrap: 'wrap' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                       <Clock size={12} color="var(--color-ink-500)" />
-                      {formatDate(session.startsAt)} • {formatTime(session.startsAt)}
+                      {formatDate(session.startsAt)} â€¢ {formatTime(session.startsAt)}
                     </span>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                       <MapPin size={12} color="var(--color-ink-500)" />
@@ -402,7 +438,7 @@ export const StudentHistory: React.FC = () => {
               Report Attendance Issue
             </h3>
             <p style={{ fontSize: '12px', color: 'var(--color-ink-500)', margin: '0 0 16px 0' }}>
-              Submit an official correction request to the course coordinator.
+              Submit an attendance correction request to the Innovations Lab coordinator.
             </p>
 
             <form onSubmit={handleSubmitReport} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

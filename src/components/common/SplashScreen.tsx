@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrandMark } from './BrandMark';
 import './splash.css';
+import splashBackground from '../../../image.png';
 
 interface SplashScreenProps {
   message?: string;
@@ -10,7 +11,16 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   message = 'Connecting to LabAttend...',
 }) => {
   return (
-    <div className="splash-screen" role="status" aria-live="polite">
+    <div
+      className="splash-screen"
+      role="status"
+      aria-live="polite"
+      style={{
+        backgroundImage: `url("${splashBackground}")`,
+        backgroundPosition: 'center',
+        backgroundSize: 'cover',
+      }}
+    >
       <div className="splash-screen__content">
         {/* Brand Icon with glowing ring */}
         <div className="splash-screen__icon-wrap">
@@ -22,7 +32,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
 
         {/* Brand Name & Tagline */}
         <h1 className="splash-screen__title">LabAttend</h1>
-        <p className="splash-screen__subtitle">University Laboratory Attendance</p>
+        <p className="splash-screen__subtitle">Innovations Lab Visit Tracking</p>
 
         {/* 3 Loading Dots */}
         <div className="splash-screen__dots" aria-label="Loading">
@@ -36,7 +46,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       </div>
 
       <div className="splash-screen__footer">
-        <span>Geolocation & Practical Verification BaaS</span>
+        <span>Arrival & Departure Tracking</span>
       </div>
     </div>
   );

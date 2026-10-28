@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { RefreshCw, UserCheck, Shield, Sparkles, Cloud } from 'lucide-react';
+import { RefreshCw, UserCheck, Shield, Sparkles } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AuthModal } from './AuthModal';
 
 export const TopDemoBar: React.FC = () => {
-  const { currentRole, switchRole, resetDemoData, currentUser, isCloudConnected, firebaseUser, logoutFirebase } = useApp();
+  const { currentRole, switchRole, resetDemoData, currentUser, firebaseUser, logoutFirebase } = useApp();
   const navigate = useNavigate();
-  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const handleRoleToggle = (targetRole: 'student' | 'coordinator') => {
     if (targetRole === currentRole) return;
@@ -50,37 +48,8 @@ export const TopDemoBar: React.FC = () => {
             <span>PROTOTYPE DEMO</span>
           </div>
 
-          <button
-            onClick={() => setShowAuthModal(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              backgroundColor: 'rgba(59, 130, 246, 0.15)',
-              border: '1px solid rgba(147, 197, 253, 0.3)',
-              color: '#93C5FD',
-              padding: '2px 8px',
-              borderRadius: 'var(--radius-pill)',
-              cursor: 'pointer',
-              fontSize: '11px',
-              fontWeight: 600,
-            }}
-            title="Open Firebase BaaS settings"
-          >
-            <Cloud size={12} />
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: isCloudConnected ? '#34D399' : '#FBBF24',
-              }}
-            />
-            <span>Firebase BaaS</span>
-          </button>
-
           <span style={{ color: '#94A3B8', fontSize: '11px' }}>
-            Active: <strong style={{ color: '#FFFFFF' }}>{currentUser.name}</strong> ({currentRole === 'student' ? 'Student' : 'Coordinator'})
+            Active: <strong style={{ color: '#FFFFFF' }}>{currentUser.name}</strong> ({currentRole === 'student' ? 'Attendee' : 'Coordinator'})
           </span>
         </div>
 
@@ -112,7 +81,7 @@ export const TopDemoBar: React.FC = () => {
               }}
             >
               <UserCheck size={12} />
-              <span>Student</span>
+              <span>Attendee</span>
             </button>
             <button
               onClick={() => handleRoleToggle('coordinator')}
@@ -142,7 +111,7 @@ export const TopDemoBar: React.FC = () => {
                 await logoutFirebase();
                 navigate('/login');
               }}
-              title="Sign out of Firebase"
+              title="Sign out"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -205,8 +174,6 @@ export const TopDemoBar: React.FC = () => {
         </div>
       </header>
 
-      {/* Firebase BaaS Cloud Modal */}
-      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
     </>
   );
 };

@@ -251,14 +251,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                         fontSize: '13px',
                       }}
                     >
-                      <option value="student">Student</option>
+                      <option value="student">Attendee</option>
                       <option value="coordinator">Lab Coordinator</option>
                     </select>
                   </div>
 
                   <div>
                     <label style={{ fontSize: '11px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-                      University ID (Student or Faculty)
+                      Member / Visitor ID
                     </label>
                     <input
                       type="text"
@@ -285,7 +285,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 <input
                   type="email"
                   required
-                  placeholder="university.student@edu.com"
+                  placeholder="attendee@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   style={{

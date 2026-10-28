@@ -12,22 +12,14 @@ import { formatDate, calculateStudentAttendanceMetrics, calculateSessionMetrics 
 export const CoordinatorReports: React.FC = () => {
   const { sessions, attendanceRecords, students, addToast } = useApp();
 
-  const [selectedCourse, setSelectedCourse] = useState<string>('all');
+  const [selectedSession, setSelectedSession] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
 
-  const getCourseKey = (session: typeof sessions[number]) =>
-    session.courseCode?.trim().toLocaleUpperCase() || session.labName?.trim().toLocaleLowerCase() || session.title.trim().toLocaleLowerCase();
   const getSessionMonth = (session: typeof sessions[number]) => {
     const date = new Date(session.startsAt);
     return Number.isNaN(date.getTime()) ? '' : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
   };
 
-  const courses = Array.from(new Map(sessions.map(session => {
-    const key = getCourseKey(session);
-    const code = session.courseCode?.trim();
-    const label = code && session.labName?.trim() ? `${code} - ${session.labName.trim()}` : code || session.labName?.trim() || session.title;
-    return [key, { key, label }] as const;
-  })).values()).sort((a, b) => a.label.localeCompare(b.label));
   const months = Array.from(new Set(sessions.map(getSessionMonth).filter(Boolean)))
     .sort((a, b) => b.localeCompare(a))
     .map(key => {
@@ -36,7 +28,7 @@ export const CoordinatorReports: React.FC = () => {
     });
 
   const filteredSessions = sessions.filter(session =>
-    (selectedCourse === 'all' || getCourseKey(session) === selectedCourse) &&
+    (selectedSession === 'all' || session.id === selectedSession) &&
     (selectedMonth === 'all' || getSessionMonth(session) === selectedMonth)
   );
   const filteredSessionIds = new Set(filteredSessions.map(session => session.id));
@@ -82,7 +74,7 @@ export const CoordinatorReports: React.FC = () => {
               Attendance Reports & Analytics
             </h1>
             <p style={{ fontSize: '13px', color: 'var(--color-ink-500)', margin: 0 }}>
-              Audit laboratory compliance, participation trends, and students requiring academic support.
+              Track visitor arrivals, departures, and attendance across Innovations Lab sessions.
             </p>
           </div>
 
@@ -99,10 +91,10 @@ export const CoordinatorReports: React.FC = () => {
         {/* Filter Controls */}
         <div className="card" style={{ padding: '14px 18px', marginBottom: '20px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-ink-500)' }}>Course Filter:</span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-ink-500)' }}>Meeting:</span>
             <select
-              value={selectedCourse}
-              onChange={(e) => setSelectedCourse(e.target.value)}
+              value={selectedSession}
+              onChange={(e) => setSelectedSession(e.target.value)}
               style={{
                 height: '36px',
                 borderRadius: 'var(--radius-sm)',
@@ -111,8 +103,8 @@ export const CoordinatorReports: React.FC = () => {
                 fontSize: '12px',
               }}
             >
-              <option value="all">All courses</option>
-              {courses.map(course => <option key={course.key} value={course.key}>{course.label}</option>)}
+              <option value="all">All meetings</option>
+              {sessions.map(session => <option key={session.id} value={session.id}>{session.title}</option>)}
             </select>
           </div>
 
@@ -139,19 +131,19 @@ export const CoordinatorReports: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '24px' }}>
           <div className="card" style={{ padding: '16px' }}>
             <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-500)' }}>
-              LABORATORY SESSIONS HELD
+              MEETING SESSIONS HELD
             </div>
             <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-ink-900)', marginTop: '4px' }}>
               {heldSessionCount}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-success-700)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <CheckCircle2 size={13} /> All syllabus targets on schedule
+              <CheckCircle2 size={13} /> Attendance activity recorded
             </div>
           </div>
 
           <div className="card" style={{ padding: '16px' }}>
             <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-500)' }}>
-              COHORT COMPLIANCE RATE
+              ATTENDANCE RATE
             </div>
             <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-brand-700)', marginTop: '4px' }}>
               {cohortComplianceRate}%
@@ -163,13 +155,13 @@ export const CoordinatorReports: React.FC = () => {
 
           <div className="card" style={{ padding: '16px' }}>
             <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-500)' }}>
-              STUDENTS NEEDING INTERVENTION
+              VISITORS WITH LOW ATTENDANCE
             </div>
             <div style={{ fontSize: '24px', fontWeight: 700, color: studentsAtRisk.length > 0 ? 'var(--color-danger-700)' : 'var(--color-success-700)', marginTop: '4px' }}>
               {studentsAtRisk.length}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', marginTop: '4px' }}>
-              Below the 75% department requirement
+              Below the 75% attendance threshold
             </div>
           </div>
         </div>
@@ -179,17 +171,17 @@ export const CoordinatorReports: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
             <AlertTriangle size={18} color="var(--color-warning-700)" />
             <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
-              Students At Risk (Below 75% Laboratory Attendance)
+              Visitors With Low Attendance (Below 75%)
             </h2>
           </div>
 
           {filteredSessions.length === 0 ? (
             <div style={{ padding: '16px', backgroundColor: 'var(--color-brand-50)', borderRadius: 'var(--radius-sm)', color: 'var(--color-ink-500)', fontSize: '13px' }}>
-              No session data matches the selected course and month.
+              No session data matches the selected meeting and month.
             </div>
           ) : studentsAtRisk.length === 0 ? (
             <div style={{ padding: '16px', backgroundColor: 'var(--color-success-100)', borderRadius: 'var(--radius-sm)', color: 'var(--color-success-700)', fontSize: '13px' }}>
-              ✓ Excellent news: All students in the cohort currently meet or exceed the 75% attendance threshold!
+              ✓ All visitors currently meet or exceed the 75% attendance threshold.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -208,10 +200,10 @@ export const CoordinatorReports: React.FC = () => {
                 >
                   <div>
                     <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-ink-900)' }}>
-                      {student.name} ({student.studentId})
+                      {student.name} · {student.studentId || 'Visitor'}
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>
-                      {student.programme} • {metrics.present} Attended, {metrics.absent} Missed
+                      {metrics.present} Attended, {metrics.absent} Missed
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -238,7 +230,7 @@ export const CoordinatorReports: React.FC = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-line)', color: 'var(--color-ink-500)', fontSize: '11px' }}>
-                  <th style={{ padding: '8px 12px' }}>Course</th>
+              <th style={{ padding: '8px 12px' }}>Location</th>
                   <th style={{ padding: '8px 12px' }}>Session</th>
                   <th style={{ padding: '8px 12px' }}>Date</th>
                   <th style={{ padding: '8px 12px' }}>Status</th>
@@ -251,7 +243,7 @@ export const CoordinatorReports: React.FC = () => {
                   return (
                     <tr key={session.id} style={{ borderBottom: '1px solid var(--color-line)' }}>
                       <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--color-brand-600)' }}>
-                        {session.courseCode || session.labName}
+                        {session.labName || session.room}
                       </td>
                       <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--color-ink-900)' }}>
                         {session.title}

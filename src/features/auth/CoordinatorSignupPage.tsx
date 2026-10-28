@@ -37,7 +37,7 @@ export const DEPARTMENTS = [
 
 export const DESIGNATIONS = [
   { value: 'Senior Lab Coordinator', label: 'Senior Lab Coordinator' },
-  { value: 'Lead Course Coordinator', label: 'Lead Course Coordinator' },
+  { value: 'Lead Innovations Lab Coordinator', label: 'Lead Innovations Lab Coordinator' },
   { value: 'Laboratory Instructor / TA', label: 'Laboratory Instructor / TA' },
   { value: 'Lecturer / Assistant Professor', label: 'Lecturer / Assistant Professor' },
   { value: 'Head of Laboratory Operations', label: 'Head of Laboratory Operations' },
@@ -121,9 +121,9 @@ export const CoordinatorSignupPage: React.FC = () => {
   const validate = (): boolean => {
     const nextErrors: Record<string, string> = {};
     if (name.trim().length < 2) nextErrors.name = 'Enter your full name and title.';
-    if (!EMAIL_RE.test(email.trim())) nextErrors.email = 'Enter a valid academic or university email.';
+    if (!EMAIL_RE.test(email.trim())) nextErrors.email = 'Enter a valid work email.';
     if (!/^[A-Za-z0-9-]{3,}$/.test(staffId.trim())) nextErrors.staffId = 'Enter your staff/faculty ID (e.g. FAC-8042).';
-    if (!department) nextErrors.department = 'Select your academic department.';
+    if (!department) nextErrors.department = 'Select your team or department.';
     if (!designation) nextErrors.designation = 'Select your faculty title.';
 
     const checks = passwordChecks(password);
@@ -169,7 +169,7 @@ export const CoordinatorSignupPage: React.FC = () => {
   return (
     <AuthLayout
       title="Coordinator Account Setup"
-      subtitle="Complete your faculty profile to oversee laboratory practicals, generate live QR sessions, and monitor attendance."
+      subtitle="Complete your profile to manage Innovations Lab meeting sessions, track arrivals and departures, and review attendance."
       wide
     >
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
@@ -177,7 +177,7 @@ export const CoordinatorSignupPage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
           <div className="auth-badge auth-badge--coordinator">
             <ShieldCheck size={13} />
-            <span>Faculty Coordinator Portal</span>
+            <span>Innovations Lab Coordinator</span>
           </div>
           <div className="auth-badge auth-badge--verified" title="Department invitation token attached">
             <Sparkles size={12} />
@@ -194,7 +194,7 @@ export const CoordinatorSignupPage: React.FC = () => {
 
         <AuthField
           id="coordinator-name"
-          label="Full Name & Academic Title"
+          label="Full Name & Title"
           autoComplete="name"
           placeholder="e.g. Dr. Elena Vance"
           icon={<User size={18} />}
@@ -207,7 +207,7 @@ export const CoordinatorSignupPage: React.FC = () => {
         <div className="auth-row auth-row--2">
           <AuthField
             id="coordinator-email"
-            label="Faculty / University Email"
+            label="Work Email"
             type="email"
             autoComplete="email"
             inputMode="email"
@@ -221,7 +221,7 @@ export const CoordinatorSignupPage: React.FC = () => {
 
           <AuthField
             id="coordinator-staff-id"
-            label="Staff / Faculty ID"
+            label="Staff ID"
             placeholder="FAC-8042"
             autoComplete="off"
             icon={<IdCard size={18} />}
@@ -235,9 +235,9 @@ export const CoordinatorSignupPage: React.FC = () => {
         <div className="auth-row auth-row--2">
           <AuthSelect
             id="coordinator-department"
-            label="School / Department"
+            label="Team / Department"
             icon={<Building2 size={18} />}
-            placeholder="Select academic department"
+            placeholder="Select team or department"
             options={DEPARTMENTS}
             value={department}
             onChange={e => { setDepartment(e.target.value); if (errors.department) setErrors(prev => ({ ...prev, department: '' })); }}
@@ -247,7 +247,7 @@ export const CoordinatorSignupPage: React.FC = () => {
 
           <AuthSelect
             id="coordinator-designation"
-            label="Academic Title / Designation"
+            label="Coordinator Role"
             icon={<Award size={18} />}
             placeholder="Select title"
             options={DESIGNATIONS}
@@ -260,8 +260,8 @@ export const CoordinatorSignupPage: React.FC = () => {
 
         <AuthField
           id="coordinator-lab-room"
-          label="Assigned Laboratory / Department Office"
-          placeholder="e.g. Turing Hall, Advanced Databases Lab 304B"
+          label="Innovations Lab / Office Location"
+          placeholder="e.g. Main Lab, Room 304B"
           icon={<MapPin size={18} />}
           value={labRoom}
           onChange={e => setLabRoom(e.target.value)}
@@ -306,7 +306,7 @@ export const CoordinatorSignupPage: React.FC = () => {
               aria-invalid={!!errors.agree}
             />
             <span>
-              I confirm that I am an authorized academic faculty or laboratory coordinator, and I agree to manage student records and sessions in compliance with academic policies.
+              I confirm that I am an authorized Innovations Lab coordinator and agree to manage attendee records and meeting sessions responsibly.
             </span>
           </label>
           {errors.agree && (

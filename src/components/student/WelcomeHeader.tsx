@@ -5,9 +5,10 @@ import { Sparkles, Bell } from 'lucide-react';
 interface WelcomeHeaderProps {
   user?: User | null;
   onOpenNotifications?: () => void;
+  unreadCount?: number;
 }
 
-export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifications }) => {
+export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifications, unreadCount = 0 }) => {
   const today = new Date();
   const dateFormatted = today.toLocaleDateString([], {
     weekday: 'long',
@@ -22,7 +23,12 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifi
         borderRadius: '0 0 24px 24px',
         background: 'linear-gradient(145deg, #283DB8 0%, #354BD1 60%, #5369E8 100%)',
         color: '#FFFFFF',
-        padding: '20px 18px 24px 18px',
+        padding: '16px 18px 20px 18px',
+        minHeight: 'min(32vh, 270px)',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        gap: '12px',
         overflow: 'hidden',
         boxShadow: '0 8px 20px rgba(40, 61, 184, 0.16)',
       }}
@@ -56,7 +62,7 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifi
           justifyContent: 'space-between',
           position: 'relative',
           zIndex: 2,
-          marginBottom: '16px',
+          marginBottom: 0,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -85,7 +91,7 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifi
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              (user?.name || 'Student').split(' ').map(n => n[0]).join('')
+              (user?.name || 'Attendee').split(' ').map(n => n[0]).join('')
             )}
           </div>
           <div>
@@ -104,13 +110,15 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifi
                 color: '#FFFFFF',
               }}
             >
-              Hi, {(user?.name || 'Student').split(' ')[0]} 👋
+              Hi, {(user?.name || 'Attendee').split(' ')[0]} 👋
             </h1>
           </div>
         </div>
 
         <button
           onClick={onOpenNotifications}
+          aria-label="Notifications"
+          aria-haspopup="dialog"
           style={{
             width: '38px',
             height: '38px',
@@ -123,10 +131,11 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifi
             justifyContent: 'center',
             cursor: 'pointer',
             transition: 'background-color 0.15s ease',
+            position: 'relative',
           }}
-          aria-label="Notifications"
         >
           <Bell size={18} />
+          {unreadCount > 0 && <span aria-label={`${unreadCount} unread notifications`} style={{ position: 'absolute', top: '-3px', right: '-3px', minWidth: '17px', height: '17px', borderRadius: '10px', background: '#EF4444', border: '2px solid #354BD1', color: '#fff', fontSize: '9px', fontWeight: 700, display: 'grid', placeItems: 'center', padding: '0 3px' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
         </button>
       </div>
 
@@ -159,13 +168,13 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifi
             }}
           >
             <Sparkles size={13} />
-            <span>STUDENT PRACTICAL PORTAL</span>
+            <span>INNOVATIONS LAB</span>
           </div>
           <div style={{ fontSize: '13px', fontWeight: 600, lineHeight: '18px', color: '#FFFFFF' }}>
-            Ready for today’s lab sessions?
+            Check in when you arrive. Check out when you leave.
           </div>
           <div style={{ fontSize: '11px', opacity: 0.85, marginTop: '2px' }}>
-            Scan session QR codes to record your verified attendance.
+            Your visit is recorded for accurate space usage.
           </div>
         </div>
 

@@ -49,7 +49,7 @@ export const NotFound: React.FC = () => {
           Page Not Found
         </h1>
         <p style={{ fontSize: '13px', color: 'var(--color-ink-500)', lineHeight: '18px', margin: '0 0 20px 0' }}>
-          The laboratory destination or route you requested could not be located on the platform.
+          The Innovations Lab page you requested could not be found.
         </p>
 
         <button
@@ -58,7 +58,7 @@ export const NotFound: React.FC = () => {
           style={{ width: '100%', height: '44px' }}
         >
           <ArrowLeft size={16} />
-          <span>Return to {currentRole === 'student' ? 'Student Dashboard' : 'Coordinator Dashboard'}</span>
+          <span>Return to {currentRole === 'student' ? 'Attendee Dashboard' : 'Coordinator Dashboard'}</span>
         </button>
       </div>
     </div>

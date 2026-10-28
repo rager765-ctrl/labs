@@ -20,7 +20,6 @@ export const CoordinatorSessionList: React.FC = () => {
     const q = searchQuery.toLowerCase();
     return (
       session.title.toLowerCase().includes(q) ||
-      session.courseCode?.toLowerCase().includes(q) ||
       session.room.toLowerCase().includes(q) ||
       session.labName.toLowerCase().includes(q)
     );
@@ -35,10 +34,10 @@ export const CoordinatorSessionList: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-ink-900)', margin: '0 0 4px 0' }}>
-              Laboratory Practical Sessions
+              Meeting Sessions
             </h1>
             <p style={{ fontSize: '13px', color: 'var(--color-ink-500)', margin: 0 }}>
-              Manage scheduling, live QR generation, student check-in windows, and audit records.
+              Schedule lab visits, manage arrivals and departures, and review attendance records.
             </p>
           </div>
 
@@ -69,7 +68,7 @@ export const CoordinatorSessionList: React.FC = () => {
             <Search size={18} color="var(--color-ink-500)" style={{ marginRight: '10px' }} />
             <input
               type="text"
-              placeholder="Search by course code, session title, lab name, or room..."
+              placeholder="Search meeting title, location, or room..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
@@ -129,10 +128,10 @@ export const CoordinatorSessionList: React.FC = () => {
           >
             <Clock size={36} color="var(--color-ink-500)" style={{ margin: '0 auto 12px auto' }} />
             <h2 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 6px 0' }}>
-              No laboratory sessions found
+              No meeting sessions found
             </h2>
             <p style={{ fontSize: '13px', color: 'var(--color-ink-500)', margin: '0 0 16px 0' }}>
-              No sessions match your search criteria. Create a new lab session to get started.
+              No sessions match your search. Create a meeting session to get started.
             </p>
             <button
               onClick={() => navigate('/coordinator/sessions/new')}
@@ -163,10 +162,10 @@ export const CoordinatorSessionList: React.FC = () => {
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-brand-600)' }}>
-                          {session.courseCode}
+                          {session.labName}
                         </span>
                         <span style={{ fontSize: '12px', color: 'var(--color-ink-500)' }}>•</span>
-                        <span style={{ fontSize: '12px', color: 'var(--color-ink-700)' }}>{session.labName}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--color-ink-700)' }}>{session.room}</span>
                       </div>
                       <h2
                         onClick={() => navigate(`/coordinator/sessions/${session.id}`)}

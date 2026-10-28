@@ -126,7 +126,7 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-brand-600)' }}>
-              {session.courseCode} ROSTER MANAGEMENT
+              {session.title} · ATTENDANCE
             </div>
             <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-ink-900)', margin: '2px 0 0 0' }}>
               Attendance Records & Manual Override
@@ -167,7 +167,7 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
               <Search size={15} color="var(--color-ink-500)" style={{ marginRight: '8px' }} />
               <input
                 type="text"
-                placeholder="Search students by name or ID..."
+                placeholder="Search visitors by name or ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
@@ -211,8 +211,8 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ backgroundColor: 'var(--color-brand-50)', borderBottom: '1px solid var(--color-line)', color: 'var(--color-ink-700)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' }}>
-                  <th style={{ padding: '12px 16px' }}>Student</th>
-                  <th style={{ padding: '12px 16px' }}>Student ID</th>
+                  <th style={{ padding: '12px 16px' }}>Attendee</th>
+                  <th style={{ padding: '12px 16px' }}>Member / Visitor ID</th>
                   <th style={{ padding: '12px 16px' }}>Status</th>
                   <th style={{ padding: '12px 16px' }}>Check-In</th>
                   <th style={{ padding: '12px 16px' }}>Check-Out</th>
@@ -223,7 +223,7 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
                 {studentRoster.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: 'var(--color-ink-500)' }}>
-                      No students found matching current query or status.
+                      No visitors match the current search or status.
                     </td>
                   </tr>
                 ) : (
@@ -237,7 +237,6 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
                     >
                       <td style={{ padding: '12px 16px' }}>
                         <div style={{ fontWeight: 600, color: 'var(--color-ink-900)' }}>{student.name}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>{student.programme}</div>
                       </td>
                       <td style={{ padding: '12px 16px', color: 'var(--color-brand-700)', fontWeight: 600, fontSize: '12px' }}>
                         {student.studentId}
@@ -460,7 +459,7 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <div>
                   <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
-                    Audit Trail: {auditStudent?.name}
+                    Attendance History: {auditStudent?.name}
                   </h3>
                   <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>
                     ID: {auditStudent?.studentId}

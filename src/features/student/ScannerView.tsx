@@ -85,7 +85,7 @@ export const ScannerView: React.FC = () => {
       .catch(err => {
         console.warn('Real GPS access failed or denied:', err.message);
         setGeoStatus('denied');
-        setGeoErrorMsg(err.message || 'Location permission is required to verify laboratory room proximity.');
+        setGeoErrorMsg(err.message || 'Location access is required to verify your meeting location.');
         setStudentCoords(null);
       });
   }, [applyCoordinates]);
@@ -133,7 +133,7 @@ export const ScannerView: React.FC = () => {
         title: 'Unrecognized QR Code',
         message: sessionMatches.length > 1
           ? 'This QR code is linked to more than one session. Ask the coordinator to regenerate the session QR code.'
-          : `Scanned: "${codeText.substring(0, 40)}". This code is not linked to a current laboratory session.`,
+          : `Scanned: "${codeText.substring(0, 40)}". This code is not linked to an active meeting session.`,
         primaryActionText: 'Scan Again',
         onPrimaryAction: () => {
           setHasScannedCode(false);
@@ -148,7 +148,7 @@ export const ScannerView: React.FC = () => {
         isOpen: true,
         type: 'error',
         title: 'Sign In Required',
-        message: 'You must be signed in with your university student account to record attendance.',
+        message: 'Sign in to record your attendance.',
         primaryActionText: 'Sign In',
         onPrimaryAction: () => navigate('/login'),
       });
@@ -171,7 +171,7 @@ export const ScannerView: React.FC = () => {
           : 'Device Location Required',
         message: result.message,
         details: [
-          { label: 'Practical', value: matchedSession.title },
+          { label: 'Meeting', value: matchedSession.title },
           { label: 'Room', value: matchedSession.room },
           ...(result.distanceMeters !== undefined ? [{ label: 'Proximity', value: `${formatDistance(result.distanceMeters)} from venue` }] : []),
           ...(result.success ? [{ label: 'Exit Time', value: formatTime(result.record?.checkedOutAt || new Date().toISOString()) }] : []),
@@ -195,7 +195,7 @@ export const ScannerView: React.FC = () => {
           title: result.code === 'success_late' ? 'Recorded Late' : 'Check-In Confirmed',
           message: result.message,
           details: [
-            { label: 'Course', value: matchedSession.courseCode || 'LAB' },
+            { label: 'Location', value: matchedSession.labName || matchedSession.room },
             { label: 'Session', value: matchedSession.title },
             { label: 'Room', value: matchedSession.room },
             { label: 'Status', value: result.code === 'success_late' ? 'Late (+15m)' : 'Present on Time' },
@@ -416,7 +416,7 @@ export const ScannerView: React.FC = () => {
     }
 
     if (activeSession.pin && pinInput.trim() !== activeSession.pin) {
-      setPinError('Incorrect session PIN. Please verify with your laboratory coordinator.');
+      setPinError('Incorrect session PIN. Please verify it with the meeting coordinator.');
       return;
     }
 
@@ -432,9 +432,9 @@ export const ScannerView: React.FC = () => {
         isOpen: true,
         type: 'success',
         title: 'PIN Verified — Check-In Recorded',
-        message: 'Your attendance and device proximity were successfully verified via laboratory coordinator PIN.',
+        message: 'Your attendance and location were verified using the coordinator PIN.',
         details: [
-          { label: 'Practical', value: activeSession.title },
+          { label: 'Meeting', value: activeSession.title },
           { label: 'Method', value: `PIN Verification (#${pinInput.trim()})` },
           { label: 'Proximity', value: result.distanceMeters !== undefined ? `Verified in Lab (${formatDistance(result.distanceMeters)})` : 'Verified on Campus' },
           { label: 'Time', value: formatTime(new Date().toISOString()) },
@@ -449,10 +449,11 @@ export const ScannerView: React.FC = () => {
 
   return (
     <div
+      className="app-scanner-shell"
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: '#1E2024',
+        backgroundColor: 'transparent',
         color: '#FFFFFF',
         zIndex: 90,
         display: 'flex',
@@ -493,7 +494,7 @@ export const ScannerView: React.FC = () => {
             Scan QR Code
           </h1>
           <span style={{ fontSize: '11px', color: '#93C5FD', fontWeight: 600 }}>
-            {activeSession ? `${activeSession.courseCode} • ${activeSession.room}` : 'General Attendance Scanner'}
+            {activeSession ? `${activeSession.title} • ${activeSession.room}` : 'General Attendance Scanner'}
           </span>
         </div>
 
@@ -865,7 +866,7 @@ export const ScannerView: React.FC = () => {
                   margin: 0,
                 }}
               >
-                Point camera at the lab session QR code. Detection is automatic!
+                Point the camera at the meeting QR code. It will scan automatically.
               </p>
               {activeSession && (
                 <div

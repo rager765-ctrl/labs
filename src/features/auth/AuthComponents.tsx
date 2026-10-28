@@ -29,7 +29,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, wide, c
       <div className="auth-brand__copy">
         <h2 className="auth-brand__title">Lab attendance, without the paper sheet.</h2>
         <p className="auth-brand__subtitle">
-          Scan in to your practicals, track your record, and manage sessions from one place.
+          Record Innovations Lab visits, check in to meetings, and manage your attendance history.
         </p>
 
         <ul className="auth-brand__points">

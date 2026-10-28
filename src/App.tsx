@@ -51,7 +51,7 @@ const RootLanding: React.FC = () => {
 
   // For both old and new users during startup, show the branded splash screen with the 3 loading dots
   if (authLoading || !minSplashDone) {
-    return <SplashScreen message="Initializing university practical session..." />;
+    return <SplashScreen message="Preparing Innovations Lab attendance..." />;
   }
 
   // If user is new (has not seen onboarding and is not authenticated), show the onboarding walkthrough

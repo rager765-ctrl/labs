@@ -76,11 +76,11 @@ export const CoordinatorSessionLive: React.FC = () => {
 
   const handleStartSession = () => {
     updateSessionStatus(session.id, 'live');
-    addToast('Practical session is now LIVE. Students can scan to check in.', 'success', 'Session Started');
+    addToast('Meeting session is now live. Attendees can scan to check in.', 'success', 'Session Started');
   };
 
   const handleEndSession = () => {
-    if (window.confirm('Are you sure you want to end this practical session? Final attendance will be marked.')) {
+    if (window.confirm('Are you sure you want to end this meeting session? Final attendance will be recorded.')) {
       updateSessionStatus(session.id, 'completed');
       addToast('Session finalized and moved to completed archives.', 'info', 'Session Ended');
     }
@@ -127,7 +127,7 @@ export const CoordinatorSessionLive: React.FC = () => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-brand-600)' }}>
-                  {session.courseCode}
+                  {session.labName || 'Innovations Lab'}
                 </span>
                 <span style={{ fontSize: '12px', color: 'var(--color-ink-500)' }}>•</span>
                 <span style={{ fontSize: '12px', color: 'var(--color-ink-700)' }}>{session.labName}</span>
@@ -214,7 +214,7 @@ export const CoordinatorSessionLive: React.FC = () => {
                 ATTENDANCE PROGRESS
               </span>
               <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-ink-900)' }}>
-                {metrics.totalArrived} of {metrics.totalExpected} Students Checked In ({metrics.rate}%)
+                {metrics.totalArrived} of {metrics.totalExpected} Attendees Checked In ({metrics.rate}%)
               </div>
             </div>
 
@@ -279,7 +279,7 @@ export const CoordinatorSessionLive: React.FC = () => {
           <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: '14px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-brand-700)', textTransform: 'uppercase' }}>
-                Laboratory Session Pass
+                Meeting Check-In Pass
               </span>
               <button
                 onClick={() => {
@@ -355,7 +355,7 @@ export const CoordinatorSessionLive: React.FC = () => {
             </div>
 
             <p style={{ fontSize: '11px', color: 'var(--color-ink-500)', margin: '0 0 8px 0', maxWidth: '300px' }}>
-              Display this screen on the laboratory projector or terminal for students arriving in {session.room}.
+              Display this screen at the meeting entrance for attendees arriving in {session.room}.
             </p>
           </div>
 
@@ -364,7 +364,7 @@ export const CoordinatorSessionLive: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <div>
                 <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0 }}>
-                  Recent Student Check-Ins
+                  Recent Arrivals
                 </h2>
                 <span style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>
                   Live incoming attendance records ({arrivals.length})
@@ -392,7 +392,7 @@ export const CoordinatorSessionLive: React.FC = () => {
             <div style={{ flex: 1, overflowY: 'auto', maxHeight: '360px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {arrivals.length === 0 ? (
                 <div style={{ padding: '36px 12px', textAlign: 'center', color: 'var(--color-ink-500)', fontSize: '12px' }}>
-                  No students checked in yet. Start the session and have students scan or simulate an arrival.
+                  No attendees have checked in yet. Start the session and scan a check-in code to record an arrival.
                 </div>
               ) : (
                 arrivals.map(rec => {
@@ -429,10 +429,10 @@ export const CoordinatorSessionLive: React.FC = () => {
                         </div>
                         <div>
                           <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink-900)' }}>
-                            {student?.name || 'Student'}
+                            {student?.name || 'Attendee'}
                           </div>
                           <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>
-                            {student?.studentId} • {rec.checkedInAt ? formatTime(rec.checkedInAt) : ''}
+                            {student?.studentId || 'Visitor'} · Arrived {rec.checkedInAt ? formatTime(rec.checkedInAt) : '—'} · {rec.checkedOutAt ? `Left ${formatTime(rec.checkedOutAt)}` : 'Still in lab'}
                           </div>
                         </div>
                       </div>

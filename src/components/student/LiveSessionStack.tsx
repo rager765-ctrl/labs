@@ -34,7 +34,7 @@ export const LiveSessionStack: React.FC<LiveSessionStackProps> = ({
     return (
       <div className="card" style={{ padding: '20px', textAlign: 'center', background: '#fff' }}>
         <Radio size={22} color="var(--color-ink-500)" style={{ margin: '0 auto 8px' }} />
-        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink-700)' }}>No live lab activities today</div>
+        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink-700)' }}>No active meeting sessions today</div>
         <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--color-ink-500)' }}>Live sessions will appear here when a coordinator starts them.</div>
       </div>
     );

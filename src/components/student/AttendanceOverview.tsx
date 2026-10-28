@@ -46,7 +46,7 @@ export const AttendanceOverview: React.FC<AttendanceOverviewProps> = ({ metrics 
           <div>
             <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', fontWeight: 500 }}>Overall Attendance</div>
             <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-ink-900)' }}>
-              {metrics.total > 0 ? `${metrics.rate}% Standing` : 'No Records Yet'}
+              {metrics.total > 0 ? `${metrics.rate}% Standing` : 'No Matching Records'}
             </div>
           </div>
         </div>
@@ -61,7 +61,7 @@ export const AttendanceOverview: React.FC<AttendanceOverviewProps> = ({ metrics 
               borderRadius: 'var(--radius-pill)',
             }}
           >
-            {metrics.total === 0 ? 'Fresh Record' : metrics.rate >= 75 ? 'Good Standing' : 'Below 75% Target'}
+            {metrics.total === 0 ? 'No Data' : metrics.rate >= 75 ? 'Good Standing' : 'Below 75% Target'}
           </span>
         </div>
       </div>

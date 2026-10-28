@@ -11,7 +11,7 @@ html, body {
   height: 100%;
   width: 100%;
   max-width: 100%;
-  background-color: var(--color-brand-50);
+  background-color: transparent;
   color: var(--color-ink-900);
   font-family: var(--font-ui);
   touch-action: pan-x pan-y;
@@ -21,7 +21,175 @@ html, body {
   overflow-x: hidden;
 }
 
+body {
+  position: relative;
+  isolation: isolate;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: url('/images/backdrop.png') center / cover no-repeat;
+  filter: blur(12px);
+  transform: scale(1.06);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+:root[data-theme='dark'] body::after {
+  background: rgba(7, 12, 24, 0.68);
+}
+
+:root[data-theme='dark'] .card,
+:root[data-theme='dark'] #root [role='dialog'],
+:root[data-theme='dark'] .auth-card,
+:root[data-theme='dark'] .auth-modal,
+:root[data-theme='dark'] .onboarding-panel {
+  background-color: var(--color-surface) !important;
+  color: var(--color-ink-900);
+  border-color: var(--color-line);
+}
+
+:root[data-theme='dark'] input,
+:root[data-theme='dark'] select,
+:root[data-theme='dark'] textarea {
+  color: var(--color-ink-900) !important;
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-line) !important;
+}
+
+:root[data-theme='dark'] input::placeholder,
+:root[data-theme='dark'] textarea::placeholder {
+  color: var(--color-ink-500);
+}
+
+:root[data-theme='dark'] #root [style*="color: #000"],
+:root[data-theme='dark'] #root [style*="color: rgb(0, 0, 0)"],
+:root[data-theme='dark'] #root [style*="color: #111827"],
+:root[data-theme='dark'] #root [style*="color: #171a2b"] {
+  color: #cbd3e2 !important;
+}
+
+:root[data-theme='dark'] .btn-primary {
+  color: #ffffff !important;
+  background-color: #536bd1 !important;
+  box-shadow: 0 2px 8px rgba(72, 95, 196, 0.32);
+}
+
+:root[data-theme='dark'] .btn-primary:hover:not(:disabled) {
+  background-color: #657de8 !important;
+}
+
+:root[data-theme='dark'] .btn-secondary {
+  color: #d8e0ff !important;
+  background-color: #303e60 !important;
+}
+
+:root[data-theme='dark'] .btn-secondary:hover:not(:disabled) {
+  background-color: #3b4b70 !important;
+}
+
+:root[data-theme='dark'] .btn-primary:disabled,
+:root[data-theme='dark'] .btn-secondary:disabled {
+  color: #9ba6bb !important;
+  background-color: #30394b !important;
+}
+
+:root[data-theme='dark'] .onboarding-title {
+  color: var(--color-ink-900) !important;
+}
+
+:root[data-theme='dark'] .onboarding-description {
+  color: var(--color-ink-700) !important;
+}
+
+:root[data-theme='dark'] .onboarding-btn-skip {
+  color: #d3d9e7;
+  background: #30394b;
+  border-color: #49556a;
+}
+
+:root[data-theme='dark'] .onboarding-btn-skip:hover {
+  color: #f1f4fb;
+  background: #3b475d;
+}
+
+.theme-toggle {
+  width: 52px;
+  height: 30px;
+  padding: 3px;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: #cbd2df;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+
+.theme-toggle[aria-checked='true'] {
+  background: var(--color-brand-600);
+}
+
+.theme-toggle__thumb {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.18s ease;
+}
+
+.theme-toggle[aria-checked='true'] .theme-toggle__thumb {
+  transform: translateX(22px);
+}
+
+.app-scanner-shell {
+  isolation: isolate;
+  background: transparent !important;
+}
+
+.app-scanner-shell::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(rgba(10, 12, 18, 0.82), rgba(10, 12, 18, 0.82)), url('/images/backdrop.png') center / cover no-repeat;
+  filter: blur(12px);
+}
+
+.app-page-shell,
+.coordinator-layout,
+.auth-page,
+.onboarding-viewport {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+/* Keep long-form and supporting copy comfortable to read on the system UI font. */
+#root :where(p, li) {
+  font-weight: 400 !important;
+}
+
+#root [style*="var(--color-ink-500)"] {
+  color: var(--color-ink-500) !important;
+  font-weight: 500 !important;
+}
+
 #root {
+  position: relative;
+  z-index: 1;
   min-height: 100%;
   width: 100%;
   max-width: 100%;

@@ -203,7 +203,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsCloudConnected(true);
     setCloudAttendanceReady({ sessions: false, attendance: false });
 
-    // 1. Live Lab Sessions
+    // 1. Live meeting sessions
     const unsubSessions = subscribeToSessions((cloudSessions: LabSession[]) => {
       setState(prev => ({ ...prev, sessions: cloudSessions }));
       setCloudAttendanceReady(prev => ({ ...prev, sessions: true }));
@@ -325,7 +325,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
       currentRole: role,
     }));
-    addToast(`Switched view to ${role === 'student' ? 'Student mode' : 'Lab Coordinator mode'}`, 'info');
+    addToast(`Switched view to ${role === 'student' ? 'Attendee mode' : 'Lab Coordinator mode'}`, 'info');
   }, [addToast]);
 
   const resetDemoData = useCallback(() => {
@@ -351,7 +351,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         code: 'not_open',
         message: session.status === 'scheduled'
           ? `Check-in is not open yet. Starts at ${new Date(session.checkInOpensAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-          : 'This practical session is completed and check-in is closed.',
+          : 'This meeting session has ended and check-in is closed.',
       };
     }
 
@@ -460,7 +460,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const distInfo = attendanceLocation ? ` (📍 ${formatDistance(attendanceLocation.distanceMeters)})` : '';
     addToast(
-      isLate ? `Checked in as Late (${session.title})${distInfo}` : `Successfully checked in to ${session.courseCode || session.title}!${distInfo}`,
+      isLate ? `Checked in as Late (${session.title})${distInfo}` : `Successfully checked in to ${session.title}!${distInfo}`,
       isLate ? 'info' : 'success',
       isLate ? 'Late Check-in' : 'Attendance Confirmed'
     );
@@ -470,7 +470,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       code: isLate ? 'success_late' : 'success_present',
       message: isLate
         ? `You were checked in late (${diffMinutes} min past threshold).`
-        : 'Your presence and location have been recorded and verified for today’s practical session.',
+        : 'Your arrival and location have been recorded for this meeting.',
       record: newRecord,
       distanceMeters: attendanceLocation?.distanceMeters,
       isWithinGeofence: attendanceLocation?.isWithinGeofence,
@@ -546,7 +546,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         {
           at: now,
           actorId: studentId,
-          action: `Student checked out [GPS: ${formatDistance(checkoutLocation.distanceMeters)} from venue; accuracy ±${checkoutLocation.accuracy}m]`,
+          action: `Attendee checked out [GPS: ${formatDistance(checkoutLocation.distanceMeters)} from venue; accuracy ±${checkoutLocation.accuracy}m]`,
         },
       ],
     };
@@ -562,7 +562,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Could not sync checkout to Firestore:', err);
     });
 
-    addToast('Lab practical check-out confirmed. Good work today!', 'success', 'Checked Out');
+    addToast('Your departure has been recorded. Thank you!', 'success', 'Checked Out');
 
     return {
       success: true,
@@ -595,7 +595,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast(`Session "${newSession.title}" scheduled successfully`, 'success', 'Session Created');
     } catch (err: any) {
       console.warn('Could not sync created session to Firestore:', err);
-      addToast(`Session saved locally. Cloud sync notice: ${err?.message || 'Permission denied'}`, 'error', 'Sync Notice');
+      addToast('Session saved, but may not be visible on other devices yet.', 'info');
     }
 
     return newSession;
@@ -636,7 +636,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
     deleteSessionFromFirestore(sessionId).catch((err: unknown) => {
       console.warn('Could not delete session from Firestore:', err);
-      addToast('Could not sync session deletion to the cloud.', 'error', 'Delete Sync Failed');
+      addToast('Unable to delete the session. Please try again.', 'error');
     });
     addToast('Session deleted.', 'success', 'Session Deleted');
   }, [addToast]);
@@ -720,7 +720,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    addToast(`Student marked as ${status.toUpperCase()}`, 'success', 'Attendance Updated');
+    addToast(`Attendee marked as ${status.toUpperCase()}`, 'success', 'Attendance Updated');
   }, [state.corrections, addToast]);
 
   const submitCorrectionRequest = useCallback((recordId: string, requestedStatus: AttendanceStatus, reason: string) => {
@@ -909,7 +909,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logoutFirebase = async () => {
     await signOutUser();
-    addToast('Signed out of Firebase account', 'info');
+    addToast('Logged out successfully', 'success');
   };
 
   const syncToCloud = async () => {
@@ -924,9 +924,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveCorrectionToFirestore(c);
       }
       setIsCloudConnected(true);
-      addToast('All local data successfully synchronized to Firebase Firestore!', 'success', 'Cloud Synced');
-    } catch (err: any) {
-      addToast('Failed to sync to Firebase: ' + err.message, 'error');
+      addToast('Your data is up to date.', 'success');
+    } catch {
+      addToast('Unable to update your data right now. Please try again.', 'error');
     }
   };
 

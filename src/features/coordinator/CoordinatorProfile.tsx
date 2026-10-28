@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { CoordinatorNav } from '../../components/coordinator/CoordinatorNav';
 import { LogOut, LogIn, User, Mail, IdCard, Building2, Award, MapPin, Pencil, X, Save, HelpCircle } from 'lucide-react';
 import { AuthField, AuthSelect } from '../auth/AuthComponents';
+import { ThemeToggle } from '../../components/common/ThemeToggle';
 import { DEPARTMENTS, DESIGNATIONS } from '../auth/CoordinatorSignupPage';
 
 export const CoordinatorProfile: React.FC = () => {
@@ -89,8 +90,10 @@ export const CoordinatorProfile: React.FC = () => {
           Coordinator Profile & Account
         </h1>
         <p style={{ fontSize: '13px', color: 'var(--color-ink-500)', margin: '0 0 20px 0' }}>
-          Laboratory supervisor credentials and account management.
+          Innovations Lab coordinator details and account settings.
         </p>
+
+        <ThemeToggle />
 
         {/* Profile Card */}
         <div className="card" style={{ padding: '24px', marginBottom: '20px', maxWidth: '600px' }}>
@@ -102,16 +105,16 @@ export const CoordinatorProfile: React.FC = () => {
           </div>
           {editingProfile && (
             <form onSubmit={saveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '14px', marginBottom: '18px', borderRadius: 'var(--radius-sm)', background: 'var(--color-brand-50)' }} noValidate>
-              <AuthField id="coordinator-profile-name" label="Full Name & Academic Title" autoComplete="name" placeholder="e.g. Dr. Elena Vance" icon={<User size={18} />} value={profile.name} onChange={event => updateField('name', event.target.value)} required />
+              <AuthField id="coordinator-profile-name" label="Full Name & Title" autoComplete="name" placeholder="e.g. Elena Vance" icon={<User size={18} />} value={profile.name} onChange={event => updateField('name', event.target.value)} required />
               <div className="auth-row auth-row--2">
-                <AuthField id="coordinator-profile-email" label="Faculty / University Email" type="email" autoComplete="email" inputMode="email" placeholder="e.vance@university.edu" icon={<Mail size={18} />} value={profile.email} onChange={event => updateField('email', event.target.value)} required />
-                <AuthField id="coordinator-profile-staff-id" label="Staff / Faculty ID" placeholder="FAC-8042" autoComplete="off" icon={<IdCard size={18} />} value={profile.staffId} onChange={event => updateField('staffId', event.target.value.toUpperCase())} required />
+                <AuthField id="coordinator-profile-email" label="Work Email" type="email" autoComplete="email" inputMode="email" placeholder="name@example.com" icon={<Mail size={18} />} value={profile.email} onChange={event => updateField('email', event.target.value)} required />
+                <AuthField id="coordinator-profile-staff-id" label="Staff ID" placeholder="LAB-8042" autoComplete="off" icon={<IdCard size={18} />} value={profile.staffId} onChange={event => updateField('staffId', event.target.value.toUpperCase())} required />
               </div>
               <div className="auth-row auth-row--2">
-                <AuthSelect id="coordinator-profile-department" label="School / Department" icon={<Building2 size={18} />} placeholder="Select academic department" options={DEPARTMENTS} value={profile.department} onChange={event => updateField('department', event.target.value)} required />
-                <AuthSelect id="coordinator-profile-designation" label="Academic Title / Designation" icon={<Award size={18} />} placeholder="Select title" options={DESIGNATIONS} value={profile.designation} onChange={event => updateField('designation', event.target.value)} required />
+                <AuthSelect id="coordinator-profile-department" label="Team / Department" icon={<Building2 size={18} />} placeholder="Select team or department" options={DEPARTMENTS} value={profile.department} onChange={event => updateField('department', event.target.value)} required />
+                <AuthSelect id="coordinator-profile-designation" label="Coordinator Role" icon={<Award size={18} />} placeholder="Select role" options={DESIGNATIONS} value={profile.designation} onChange={event => updateField('designation', event.target.value)} required />
               </div>
-              <AuthField id="coordinator-profile-lab-room" label="Assigned Laboratory / Department Office" placeholder="e.g. Turing Hall, Advanced Databases Lab 304B" icon={<MapPin size={18} />} value={profile.labRoom} onChange={event => updateField('labRoom', event.target.value)} />
+              <AuthField id="coordinator-profile-lab-room" label="Innovations Lab / Office Location" placeholder="e.g. Main Lab, Room 304B" icon={<MapPin size={18} />} value={profile.labRoom} onChange={event => updateField('labRoom', event.target.value)} />
               {profileError && <p role="alert" style={{ color: 'var(--color-danger-700)', fontSize: '12px', margin: 0 }}>{profileError}</p>}
               <button type="submit" className="btn-primary" disabled={savingProfile} style={{ alignSelf: 'flex-start', gap: '7px' }}>
                 <Save size={15} /> {savingProfile ? 'Saving...' : 'Save changes'}
@@ -266,13 +269,13 @@ export const CoordinatorProfile: React.FC = () => {
                 }}
               >
                 <LogOut size={16} />
-                <span>Sign Out of Faculty Account</span>
+                <span>Log Out</span>
               </button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <p style={{ fontSize: '12px', color: 'var(--color-ink-500)', margin: 0 }}>
-                You are currently previewing coordinator actions with the local demo profile (Dr. Elena Vance). Sign in to your coordinator account to manage live classes in the cloud.
+                You are previewing coordinator actions with a demo profile. Sign in to manage live meeting sessions.
               </p>
               <Link
                 to="/login"

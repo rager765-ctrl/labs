@@ -24,10 +24,10 @@ export const CheckInActionCard: React.FC<CheckInActionCardProps> = ({
     return (
       <div className="card" style={{ padding: '20px', textAlign: 'center' }}>
         <div style={{ color: 'var(--color-ink-500)', fontSize: '13px', marginBottom: '8px' }}>
-          No active or upcoming lab sessions scheduled today.
+          No meeting sessions are scheduled today.
         </div>
         <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>
-          Check your attendance history or syllabus for future sessions.
+          Check your visit history for upcoming sessions.
         </div>
       </div>
     );
@@ -58,7 +58,7 @@ export const CheckInActionCard: React.FC<CheckInActionCardProps> = ({
               letterSpacing: '0.04em',
             }}
           >
-            {session.courseCode || 'LAB PRACTICAL'}
+            {session.labName || 'INNOVATIONS LAB'}
           </span>
           <h2
             onClick={onViewSessionClick}
@@ -232,7 +232,7 @@ export const CheckInActionCard: React.FC<CheckInActionCardProps> = ({
       {isCheckedIn && !isCheckedOut && session.requiresCheckOut && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '10px', fontSize: '11px', color: 'var(--color-brand-600)' }}>
           <Clock size={13} />
-          <span>Please remember to check out before leaving the laboratory.</span>
+          <span>Please check out when you leave the lab.</span>
         </div>
       )}
     </div>

@@ -35,12 +35,11 @@ export const signInUser = async (email: string, password: string): Promise<User>
   const isCoord = fbUser.email === 'e.vance@university.edu' || fbUser.email?.toLowerCase().includes('coord');
   const defaultProfile: User = {
     id: fbUser.uid,
-    name: fbUser.displayName || (isCoord ? 'Dr. Elena Vance' : 'University Member'),
+    name: fbUser.displayName || (isCoord ? 'Innovations Lab Coordinator' : 'Lab Visitor'),
     email: fbUser.email || email,
     role: isCoord ? 'coordinator' : 'student',
-    studentId: isCoord ? 'FAC-8042' : 'STU-' + fbUser.uid.substring(0, 6).toUpperCase(),
-    programme: isCoord ? 'School of Computing & Data Science' : 'B.Sc. Computer Science',
-    level: isCoord ? 'Senior Lab Coordinator' : 'Level 300',
+    studentId: isCoord ? 'FAC-8042' : 'VIS-' + fbUser.uid.substring(0, 6).toUpperCase(),
+    ...(isCoord ? { programme: 'Innovations Lab', level: 'Senior Lab Coordinator' } : {}),
   };
 
   await setDoc(userDocRef, defaultProfile);
@@ -66,9 +65,8 @@ export const signUpUser = async (
     name,
     email: fbUser.email || email,
     role,
-    studentId: studentId || (role === 'student' ? 'STU-' + fbUser.uid.substring(0, 6).toUpperCase() : 'FAC-8042'),
-    programme: programme || (role === 'student' ? 'B.Sc. Computer Science' : 'School of Computing'),
-    level: level || (role === 'student' ? 'Level 300' : 'Lab Coordinator'),
+    studentId: studentId || (role === 'student' ? 'VIS-' + fbUser.uid.substring(0, 6).toUpperCase() : 'FAC-8042'),
+    ...(role === 'coordinator' ? { programme: programme || 'Innovations Lab', level: level || 'Lab Coordinator' } : {}),
   };
 
   const userDocRef = doc(db, 'users', fbUser.uid);

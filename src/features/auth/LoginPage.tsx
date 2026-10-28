@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, AlertCircle, Info } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { AuthLayout, AuthField, friendlyAuthError } from './AuthComponents';
@@ -25,8 +25,6 @@ export const LoginPage: React.FC = () => {
     return Object.keys(next).length === 0;
   };
 
-  const location = useLocation();
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -35,11 +33,7 @@ export const LoginPage: React.FC = () => {
     setSubmitting(true);
     try {
       const profile = await loginWithEmail(email.trim(), password);
-      const fromPath = (location.state as any)?.from?.pathname;
-      const targetDefault = profile.role === 'coordinator' ? '/coordinator' : '/student';
-      // If previous path matched role, return there; otherwise go to role dashboard
-      const shouldReturnToFrom = fromPath && fromPath.startsWith(`/${profile.role}`);
-      navigate(shouldReturnToFrom ? fromPath : targetDefault, { replace: true });
+      navigate(profile.role === 'coordinator' ? '/coordinator' : '/student', { replace: true });
     } catch (err: any) {
       setFormError(friendlyAuthError(err?.code));
     } finally {
@@ -48,7 +42,7 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <AuthLayout title="Welcome back" subtitle="Sign in to see your lab sessions and attendance.">
+    <AuthLayout title="Welcome back" subtitle="Sign in to manage your Innovations Lab visits.">
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
         {formError && (
           <div className="auth-alert auth-alert--error" role="alert">
@@ -92,13 +86,13 @@ export const LoginPage: React.FC = () => {
         <div className="auth-role-note">
           <span className="auth-role-note__icon"><Info size={14} /></span>
           <span>
-            Sign in with your university account credentials to access your laboratory schedule and attendance records.
+            Sign in to view meeting schedules and your arrival and departure history.
           </span>
         </div>
       </form>
 
       <div className="auth-footer">
-        New student? <Link to="/signup" className="auth-link" id="login-to-signup">Create an account</Link>
+        New attendee? <Link to="/signup" className="auth-link" id="login-to-signup">Create an account</Link>
       </div>
     </AuthLayout>
   );

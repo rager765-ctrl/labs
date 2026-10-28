@@ -9,7 +9,7 @@
   --color-brand-50: #eef3ff;
   --color-ink-900: #171a2b;
   --color-ink-700: #3f4658;
-  --color-ink-500: #7d8496;
+  --color-ink-500: #60697a;
   --color-surface: #ffffff;
   --color-line: #e6eaf2;
   --color-success-700: #15845a;
@@ -22,12 +22,12 @@
 
   /* Typography */
   --font-display: 'Squada One', 'Dela Gothic One', 'Syne', 'Anton', -apple-system, sans-serif;
-  --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, sans-serif;
   --text-display: 700 28px/32px var(--font-display);
   --text-heading: 700 20px/24px var(--font-display);
-  --text-card-title: 600 14px/20px var(--font-ui);
+  --text-card-title: 500 14px/20px var(--font-ui);
   --text-body: 400 13px/19px var(--font-ui);
-  --text-label: 600 11px/16px var(--font-ui);
+  --text-label: 500 11px/16px var(--font-ui);
   --text-caption: 400 10px/14px var(--font-ui);
   --text-metric: 700 24px/28px var(--font-display);
 
@@ -59,4 +59,26 @@
   --layout-content-max: 480px;
   --size-control: 44px;
   --size-nav: 64px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-brand-700: #536bd1;
+  --color-brand-600: #657de8;
+  --color-brand-500: #8195f2;
+  --color-brand-100: #303e60;
+  --color-brand-50: #202b42;
+  --color-ink-900: #f1f4fb;
+  --color-ink-700: #cbd3e2;
+  --color-ink-500: #aab4c7;
+  --color-surface: #151c2b;
+  --color-line: #354054;
+  --color-success-700: #55c795;
+  --color-success-100: #18372f;
+  --color-warning-700: #efb65d;
+  --color-warning-100: #3a3020;
+  --color-danger-700: #f08a98;
+  --color-overlay: rgba(3, 7, 15, 0.78);
+  --shadow-card: 0 3px 16px rgba(0, 0, 0, 0.24);
+  --shadow-sheet: 0 -8px 28px rgba(0, 0, 0, 0.42);
 }

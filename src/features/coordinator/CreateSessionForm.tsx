@@ -14,8 +14,7 @@ export const CreateSessionForm: React.FC = () => {
   const editingSession = availableSessions.find(session => session?.id === sessionId);
 
   const [title, setTitle] = useState('');
-  const [courseCode, setCourseCode] = useState('CS302');
-  const [labName, setLabName] = useState('Software Engineering Lab');
+  const [labName, setLabName] = useState('Innovations Lab');
   const [room, setRoom] = useState('');
   const [date, setDate] = useState(() => {
     const d = new Date();
@@ -50,7 +49,6 @@ export const CreateSessionForm: React.FC = () => {
     const toLocalDate = (dateValue: Date) => new Date(dateValue.getTime() - dateValue.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     const toLocalTime = (dateValue: Date) => `${String(dateValue.getHours()).padStart(2, '0')}:${String(dateValue.getMinutes()).padStart(2, '0')}`;
     setTitle(editingSession.title);
-    setCourseCode(editingSession.courseCode || '');
     setLabName(editingSession.labName);
     setRoom(editingSession.room);
     setDate(toLocalDate(startsAt));
@@ -126,7 +124,6 @@ export const CreateSessionForm: React.FC = () => {
     const newErrors: Record<string, string> = {};
 
     if (!title.trim()) newErrors.title = 'Session title is required.';
-    if (!courseCode.trim()) newErrors.courseCode = 'Course code is required.';
     if (!room.trim()) newErrors.room = 'Lab room is required.';
     if (!date) newErrors.date = 'Date is required.';
     if (!startTime) newErrors.startTime = 'Start time is required.';
@@ -160,7 +157,6 @@ export const CreateSessionForm: React.FC = () => {
 
     const sessionData = {
       title: title.trim(),
-      courseCode: courseCode.trim().toUpperCase(),
       labName: labName.trim(),
       room: room.trim(),
       eligibleStudentIds: editingSession?.eligibleStudentIds || eligibleStudents.map(student => student.id),
@@ -226,10 +222,10 @@ export const CreateSessionForm: React.FC = () => {
 
         <div style={{ marginBottom: '20px' }}>
           <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-ink-900)', margin: '0 0 4px 0' }}>
-            {editingSession ? 'Edit Laboratory Session' : 'Schedule New Laboratory Session'}
+            {editingSession ? 'Edit Meeting Session' : 'Schedule a Meeting Session'}
           </h1>
           <p style={{ fontSize: '13px', color: 'var(--color-ink-500)', margin: 0 }}>
-              {editingSession ? 'Update the session schedule, venue, attendance rules, and check-in options.' : 'Configure attendance parameters, eligible cohorts, check-in windows, and QR verification options.'}
+              {editingSession ? 'Update the session time, meeting location, attendance rules, and check-in options.' : 'Set the meeting time and location, attendance window, and QR check-in options.'}
           </p>
         </div>
 
@@ -255,7 +251,7 @@ export const CreateSessionForm: React.FC = () => {
           >
             <AlertCircle size={18} color="var(--color-warning-700)" style={{ flexShrink: 0, marginTop: '2px' }} />
             <div style={{ fontSize: '12px', color: 'var(--color-warning-700)' }}>
-              <strong>Notice:</strong> Another session is currently scheduled in <strong>{room}</strong> on this date. Double check schedules to prevent overlapping physical lab occupancy.
+              <strong>Notice:</strong> Another session is scheduled in <strong>{room}</strong> on this date. Check for overlapping room use.
             </div>
           </div>
         )}
@@ -271,36 +267,14 @@ export const CreateSessionForm: React.FC = () => {
             gap: '18px',
           }}
         >
-          {/* Title & Course */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr', gap: '14px' }}>
-            <div>
+          {/* Meeting title */}
+          <div>
               <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-                Course Code *
+                Meeting / Session Title *
               </label>
               <input
                 type="text"
-                placeholder="e.g. CS302"
-                value={courseCode}
-                onChange={(e) => setCourseCode(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '42px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: `1px solid ${errors.courseCode ? 'var(--color-danger-700)' : 'var(--color-line)'}`,
-                  padding: '0 12px',
-                  fontSize: '13px',
-                }}
-              />
-              {errors.courseCode && <span style={{ fontSize: '11px', color: 'var(--color-danger-700)' }}>{errors.courseCode}</span>}
-            </div>
-
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-                Session Title / Practical Topic *
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Microservices & Distributed Caching Practical"
+                placeholder="e.g. Product design review, team stand-up"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 style={{
@@ -313,14 +287,13 @@ export const CreateSessionForm: React.FC = () => {
                 }}
               />
               {errors.title && <span style={{ fontSize: '11px', color: 'var(--color-danger-700)' }}>{errors.title}</span>}
-            </div>
           </div>
 
-          {/* Laboratory Name & Room */}
+          {/* Meeting location & room */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
             <div>
               <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-                Laboratory Facility Name
+                Location Name
               </label>
               <input
                 type="text"
@@ -339,7 +312,7 @@ export const CreateSessionForm: React.FC = () => {
 
             <div>
               <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-                Room / Hall *
+                Room / Area *
               </label>
               <input
                 type="text"
@@ -392,7 +365,7 @@ export const CreateSessionForm: React.FC = () => {
                     Geolocation & Physical Proximity
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>
-                    Verify students are physically present in the laboratory using GPS hardware
+                    Verify attendees are at the meeting location using device GPS
                   </div>
                 </div>
               </div>
@@ -546,7 +519,7 @@ export const CreateSessionForm: React.FC = () => {
                       Strict Geofence Enforcement (Recommended)
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>
-                      Rejects check-in attempts if the student's device is beyond {radiusMeters}m from the venue.
+                      Rejects check-ins when an attendee is beyond {radiusMeters}m from the meeting location.
                     </div>
                   </div>
                 </label>
@@ -677,10 +650,10 @@ export const CreateSessionForm: React.FC = () => {
           >
             <div>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink-900)' }}>
-                Require Student Check-Out
+                Require Attendee Check-Out
               </div>
               <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>
-                Students must scan/tap out before leaving the lab to verify completion.
+                Attendees must scan or tap out when leaving the lab.
               </div>
             </div>
             <input
@@ -694,11 +667,11 @@ export const CreateSessionForm: React.FC = () => {
           {/* Description & Notes */}
           <div>
             <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-              Syllabus Objectives & Description
+              Meeting Agenda & Description
             </label>
             <textarea
               rows={2}
-              placeholder="Summary of lab activities, code exercises, or practical equipment to be handled..."
+              placeholder="Add a short agenda or meeting notes..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               style={{
@@ -714,11 +687,11 @@ export const CreateSessionForm: React.FC = () => {
 
           <div>
             <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-              Student Instructions / Prerequisites
+              Attendee Instructions / Meeting Notes
             </label>
             <input
               type="text"
-              placeholder="e.g. Bring university ID and have Node.js v20 installed"
+              placeholder="e.g. Bring a visitor badge or required materials"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               style={{

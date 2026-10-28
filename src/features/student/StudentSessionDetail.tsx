@@ -25,7 +25,7 @@ export const StudentSessionDetail: React.FC = () => {
     return (
       <div style={{ padding: '40px 20px', textAlign: 'center' }}>
         <h2>Session Not Found</h2>
-        <p>The requested laboratory session could not be located.</p>
+        <p>The requested meeting session could not be found.</p>
         <button onClick={() => navigate('/student')} className="btn-primary" style={{ marginTop: '16px' }}>
           Back to Home
         </button>
@@ -57,6 +57,7 @@ export const StudentSessionDetail: React.FC = () => {
 
   return (
     <div
+      className="app-page-shell"
       style={{
         minHeight: '100vh',
         backgroundColor: 'var(--color-brand-50)',
@@ -111,7 +112,7 @@ export const StudentSessionDetail: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
             <div>
               <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-brand-600)', letterSpacing: '0.04em' }}>
-                {session.courseCode} • {session.labName}
+                {session.labName || 'Innovations Lab'}
               </span>
               <h1 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-ink-900)', margin: '4px 0 0 0', lineHeight: '24px' }}>
                 {session.title}
@@ -193,7 +194,7 @@ export const StudentSessionDetail: React.FC = () => {
           {session.description && (
             <div>
               <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-ink-900)', marginBottom: '4px' }}>
-                Laboratory Syllabus & Tasks
+                Meeting Notes & Agenda
               </div>
               <p style={{ fontSize: '13px', color: 'var(--color-ink-700)', lineHeight: '18px', margin: 0 }}>
                 {session.description}
@@ -217,7 +218,7 @@ export const StudentSessionDetail: React.FC = () => {
             >
               <FileText size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
               <div>
-                <strong>Student Instructions:</strong> {session.notes}
+                <strong>Attendee Notes:</strong> {session.notes}
               </div>
             </div>
           )}
@@ -301,7 +302,7 @@ export const StudentSessionDetail: React.FC = () => {
                   style={{ width: '100%', height: '44px', marginTop: '8px' }}
                 >
                   <LogOut size={16} />
-                  <span>{checkingOut ? 'Verifying device location...' : 'Check Out of Laboratory'}</span>
+                  <span>{checkingOut ? 'Verifying device location...' : 'Check Out'}</span>
                 </button>
               )}
 
@@ -339,7 +340,7 @@ export const StudentSessionDetail: React.FC = () => {
           ) : (
             <div style={{ textAlign: 'center', padding: '12px 0' }}>
               <p style={{ fontSize: '13px', color: 'var(--color-ink-500)', margin: '0 0 14px 0' }}>
-                No attendance has been logged yet for this practical session.
+                No attendance has been recorded for this meeting yet.
               </p>
               {session.status === 'live' ? (
                 <button

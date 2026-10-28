@@ -26,7 +26,7 @@ export const UpcomingSessionList: React.FC<UpcomingSessionListProps> = ({ sessio
           No further sessions scheduled
         </div>
         <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', marginTop: '4px' }}>
-          All required practical laboratories for this period are completed.
+          There are no more meeting sessions scheduled for this period.
         </div>
       </div>
     );
@@ -58,9 +58,6 @@ export const UpcomingSessionList: React.FC<UpcomingSessionListProps> = ({ sessio
         >
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-brand-600)' }}>
-                {session.courseCode}
-              </span>
               <StatusBadge status={session.status} size="sm" />
             </div>
             <div
