@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, User, IdCard, GraduationCap, Layers, AlertCircle, ShieldCheck, Shield } from 'lucide-react';
+import { Mail, Lock, User, IdCard, GraduationCap, Layers, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { AuthLayout, AuthField, AuthSelect, PasswordStrength, passwordChecks, friendlyAuthError } from './AuthComponents';
 
@@ -85,18 +85,6 @@ export const SignupPage: React.FC = () => {
 
   return (
     <AuthLayout wide title="Create your student account" subtitle="It takes about a minute. You'll use this to check in to lab sessions.">
-      {/* Role Switcher Tabs */}
-      <nav className="auth-role-tabs" aria-label="Account Type Selection">
-        <span className="auth-role-tab auth-role-tab--active" aria-current="page" id="active-student-tab">
-          <GraduationCap size={16} />
-          <span>Student Account</span>
-        </span>
-        <Link to="/coordinator-signup" className="auth-role-tab" id="switch-to-coordinator-signup">
-          <Shield size={16} />
-          <span>Faculty Coordinator</span>
-        </Link>
-      </nav>
-
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
         {formError && (
           <div className="auth-alert auth-alert--error" role="alert">
@@ -171,28 +159,19 @@ export const SignupPage: React.FC = () => {
         </div>
 
         <button type="submit" className="btn-primary auth-submit" disabled={submitting} id="signup-submit">
-          {submitting ? <><span className="auth-spinner" aria-hidden="true" /> Creating account…</> : 'Create student account'}
+          {submitting ? <><span className="auth-spinner" aria-hidden="true" /> Creating account…</> : 'Create account'}
         </button>
 
         <div className="auth-role-note">
           <span className="auth-role-note__icon"><ShieldCheck size={14} /></span>
           <span>
-            <strong>Lab coordinator or faculty?</strong> Use our{' '}
-            <Link to="/coordinator-signup" style={{ color: 'var(--color-brand-700)', fontWeight: 700, textDecoration: 'underline' }}>
-              Coordinator Registration Form
-            </Link>{' '}
-            to get supervisor and session management access.
+            Student registration is strictly for enrolled students to verify attendance in scheduled lab sessions.
           </span>
         </div>
       </form>
 
-      <div className="auth-footer" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div>
-          Already have an account? <Link to="/login" className="auth-link" id="signup-to-login">Sign in</Link>
-        </div>
-        <div style={{ fontSize: '12px', color: 'var(--color-ink-400)' }}>
-          Faculty member? <Link to="/coordinator-signup" className="auth-link">Register as a coordinator</Link>
-        </div>
+      <div className="auth-footer">
+        Already have an account? <Link to="/login" className="auth-link" id="signup-to-login">Sign in</Link>
       </div>
     </AuthLayout>
   );

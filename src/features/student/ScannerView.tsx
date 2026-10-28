@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { X, Flashlight, Camera, KeyRound, Sparkles, AlertCircle, RefreshCw, SwitchCamera, Locate, CheckCircle2 } from 'lucide-react';
+import { X, Flashlight, Camera, KeyRound, AlertCircle, RefreshCw, SwitchCamera, Locate, CheckCircle2 } from 'lucide-react';
 import { ConfirmationSheet } from '../../components/common/ConfirmationSheet';
 import type { ConfirmationSheetProps } from '../../components/common/ConfirmationSheet';
 import { formatTime } from '../../services/storage';
@@ -22,12 +22,11 @@ export const ScannerView: React.FC = () => {
   const [pinError, setPinError] = useState('');
   const [hasScannedCode, setHasScannedCode] = useState(false);
 
-  // Geolocation & Proximity State
+  // Geolocation & Proximity State (Real Device Hardware GPS)
   const [studentCoords, setStudentCoords] = useState<{ latitude: number; longitude: number; accuracy: number } | null>(null);
   const [geoStatus, setGeoStatus] = useState<'acquiring' | 'verified' | 'out_of_range' | 'denied' | 'disabled'>('acquiring');
   const [geoDistance, setGeoDistance] = useState<number | null>(null);
   const [geoErrorMsg, setGeoErrorMsg] = useState<string>('');
-  const [proximitySimMode, setProximitySimMode] = useState<'real' | 'sim_inside' | 'sim_outside'>('sim_inside');
 
   // Confirmation sheet state
   const [sheetConfig, setSheetConfig] = useState<Omit<ConfirmationSheetProps, 'isOpen' | 'onClose'> & { isOpen: boolean }>({
@@ -44,10 +43,6 @@ export const ScannerView: React.FC = () => {
 
   // Identify today's active live or primary session
   const activeSession = sessions.find(s => s.status === 'live') || sessions[0];
-  const studentRecord = activeSession
-    ? attendanceRecords.find(r => r.sessionId === activeSession.id && r.studentId === currentUser.id)
-    : undefined;
-  const isCheckedIn = studentRecord && (studentRecord.status === 'present' || studentRecord.status === 'late');
 
   const applyCoordinates = useCallback((lat: number, lng: number, acc = 8) => {
     const coords = { latitude: lat, longitude: lng, accuracy: acc };
@@ -62,38 +57,24 @@ export const ScannerView: React.FC = () => {
     }
   }, [activeSession]);
 
-  useEffect(() => {
-    if (!activeSession) return;
+  const requestDeviceGps = useCallback(() => {
+    setGeoStatus('acquiring');
+    setGeoErrorMsg('');
+    getDeviceCurrentPosition({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 })
+      .then(pos => {
+        applyCoordinates(pos.latitude, pos.longitude, pos.accuracy);
+      })
+      .catch(err => {
+        console.warn('Real GPS access failed or denied:', err.message);
+        setGeoStatus('denied');
+        setGeoErrorMsg(err.message || 'Location permission is required to verify laboratory room proximity.');
+        setStudentCoords(null);
+      });
+  }, [applyCoordinates]);
 
-    if (proximitySimMode === 'sim_inside') {
-      // 12m from venue: Guaranteed verified within room
-      if (activeSession.geofence && activeSession.geofence.enabled) {
-        applyCoordinates(activeSession.geofence.latitude + 0.00008, activeSession.geofence.longitude + 0.00006, 6);
-      } else {
-        applyCoordinates(37.774929, -122.419416, 6);
-      }
-    } else if (proximitySimMode === 'sim_outside') {
-      // 450m from venue: Tests honest rejection beyond geofence
-      if (activeSession.geofence && activeSession.geofence.enabled) {
-        applyCoordinates(activeSession.geofence.latitude + 0.0038, activeSession.geofence.longitude + 0.0035, 12);
-      } else {
-        applyCoordinates(37.780000, -122.410000, 12);
-      }
-    } else {
-      // Real Hardware GPS
-      setGeoStatus('acquiring');
-      getDeviceCurrentPosition({ enableHighAccuracy: true, timeout: 8000, maximumAge: 15000 })
-        .then(pos => {
-          applyCoordinates(pos.latitude, pos.longitude, pos.accuracy);
-        })
-        .catch(err => {
-          console.warn('GPS hardware access:', err.message);
-          setGeoStatus('denied');
-          setGeoErrorMsg(err.message);
-          setStudentCoords(null);
-        });
-    }
-  }, [proximitySimMode, activeSession, applyCoordinates]);
+  useEffect(() => {
+    requestDeviceGps();
+  }, [requestDeviceGps]);
 
   // Play subtle feedback beep using Web Audio API on successful scan
   const playBeep = () => {
@@ -377,82 +358,6 @@ export const ScannerView: React.FC = () => {
     setFacingMode(prev => (prev === 'environment' ? 'user' : 'environment'));
   };
 
-  const handleSimulateScan = () => {
-    if (!activeSession) {
-      setSheetConfig({
-        isOpen: true,
-        type: 'error',
-        title: 'No Session Found',
-        message: 'No laboratory practical session is active at this time.',
-        primaryActionText: 'Back to Dashboard',
-        onPrimaryAction: () => navigate('/student'),
-      });
-      return;
-    }
-
-    playBeep();
-
-    if (isCheckedIn && !studentRecord?.checkedOutAt && activeSession.requiresCheckOut) {
-      const result = checkOutStudent(activeSession.id, currentUser.id, studentCoords || undefined);
-      setSheetConfig({
-        isOpen: true,
-        type: result.success ? 'success' : 'error',
-        title: result.success ? 'Checked Out Successfully' : 'Check-Out Notice',
-        message: result.message,
-        details: [
-          { label: 'Practical', value: activeSession.title },
-          { label: 'Room', value: activeSession.room },
-          { label: 'Exit Time', value: formatTime(new Date().toISOString()) },
-          ...(result.distanceMeters !== undefined ? [{ label: 'Proximity', value: `${formatDistance(result.distanceMeters)} from venue` }] : []),
-        ],
-        primaryActionText: 'Return to Home',
-        onPrimaryAction: () => navigate('/student'),
-      });
-    } else {
-      const result = checkInStudent(activeSession.id, currentUser.id, 'Simulated QR Scan', studentCoords || undefined);
-      if (result.success) {
-        setSheetConfig({
-          isOpen: true,
-          type: result.code === 'success_late' ? 'warning' : 'success',
-          title: result.code === 'success_late' ? 'Recorded Late' : 'Check-In Confirmed',
-          message: result.message,
-          details: [
-            { label: 'Course', value: activeSession.courseCode || 'LAB' },
-            { label: 'Session', value: activeSession.title },
-            { label: 'Room', value: activeSession.room },
-            { label: 'Status', value: result.code === 'success_late' ? 'Late (+15m)' : 'Present on Time' },
-            { label: 'Proximity', value: result.distanceMeters !== undefined ? `Verified in Lab (${formatDistance(result.distanceMeters)})` : 'Verified on Campus' },
-            { label: 'Timestamp', value: formatTime(result.record?.checkedInAt || new Date().toISOString()) },
-          ],
-          primaryActionText: 'View Dashboard',
-          onPrimaryAction: () => navigate('/student'),
-        });
-      } else {
-        const isGeoError = result.code === 'geofence_out_of_range' || result.code === 'geolocation_required';
-        setSheetConfig({
-          isOpen: true,
-          type: isGeoError ? 'error' : result.code === 'already_checked_in' ? 'info' : 'error',
-          title: result.code === 'geofence_out_of_range'
-            ? 'Location Verification Failed'
-            : result.code === 'geolocation_required'
-            ? 'GPS Location Required'
-            : result.code === 'already_checked_in'
-            ? 'Already Recorded'
-            : 'Check-In Notice',
-          message: result.message,
-          details: result.code === 'geofence_out_of_range' ? [
-            { label: 'Venue', value: result.venueName || activeSession.room },
-            { label: 'Your Distance', value: formatDistance(result.distanceMeters || 0) },
-            { label: 'Allowed Range', value: `Within ${result.requiredRadius || 50}m` },
-            { label: 'Requirement', value: 'Physical presence in lab' },
-          ] : undefined,
-          primaryActionText: 'Understood',
-          onPrimaryAction: () => setSheetConfig(prev => ({ ...prev, isOpen: false })),
-        });
-      }
-    }
-  };
-
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPinError('');
@@ -467,7 +372,7 @@ export const ScannerView: React.FC = () => {
     }
 
     if (activeSession.pin && pinInput.trim() !== activeSession.pin) {
-      setPinError(`Incorrect PIN. (Coordinator demo PIN is ${activeSession.pin})`);
+      setPinError('Incorrect session PIN. Please verify with your laboratory coordinator.');
       return;
     }
 
@@ -685,20 +590,20 @@ export const ScannerView: React.FC = () => {
             <>
               <CheckCircle2 size={13} />
               <span>
-                GPS Verified: Inside Lab ({geoDistance !== null ? formatDistance(geoDistance) : '12m'} from {activeSession?.room?.split(',')[0] || 'Venue'})
+                GPS Verified: Inside Lab ({geoDistance !== null ? formatDistance(geoDistance) : 'In Lab'} from {activeSession?.room?.split(',')[0] || 'Venue'})
               </span>
             </>
           ) : geoStatus === 'out_of_range' ? (
             <>
               <AlertCircle size={13} />
               <span>
-                GPS Out of Range: {geoDistance !== null ? formatDistance(geoDistance) : '450m'} away (Max: {activeSession?.geofence?.radiusMeters || 50}m)
+                GPS Warning: {geoDistance !== null ? formatDistance(geoDistance) : 'Out of range'} away (Max: {activeSession?.geofence?.radiusMeters || 50}m)
               </span>
             </>
           ) : geoStatus === 'denied' ? (
             <>
               <AlertCircle size={13} />
-              <span>{geoErrorMsg ? `GPS Notice: ${geoErrorMsg}` : 'GPS Access Denied • Using Proximity'}</span>
+              <span>{geoErrorMsg ? `Location: ${geoErrorMsg}` : 'GPS Access Denied • Permission Required'}</span>
             </>
           ) : (
             <>
@@ -708,61 +613,28 @@ export const ScannerView: React.FC = () => {
           )}
         </div>
 
-        {/* Proximity Simulation / Mode Selector for Honest Testing */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ fontSize: '10px', color: '#94A3B8' }}>GPS Mode:</span>
-          <button
-            type="button"
-            onClick={() => setProximitySimMode('sim_inside')}
-            style={{
-              padding: '2px 8px',
-              fontSize: '10px',
-              fontWeight: 600,
-              borderRadius: 'var(--radius-pill)',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: proximitySimMode === 'sim_inside' ? '#059669' : 'rgba(255,255,255,0.1)',
-              color: '#FFFFFF',
-            }}
-            title="Simulate student physically sitting inside the laboratory room (12m away)"
-          >
-            In Lab (12m)
-          </button>
-          <button
-            type="button"
-            onClick={() => setProximitySimMode('sim_outside')}
-            style={{
-              padding: '2px 8px',
-              fontSize: '10px',
-              fontWeight: 600,
-              borderRadius: 'var(--radius-pill)',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: proximitySimMode === 'sim_outside' ? '#DC2626' : 'rgba(255,255,255,0.1)',
-              color: '#FFFFFF',
-            }}
-            title="Simulate student trying to check in from off-campus or dorm (450m away)"
-          >
-            Out of Range (450m)
-          </button>
-          <button
-            type="button"
-            onClick={() => setProximitySimMode('real')}
-            style={{
-              padding: '2px 8px',
-              fontSize: '10px',
-              fontWeight: 600,
-              borderRadius: 'var(--radius-pill)',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: proximitySimMode === 'real' ? 'var(--color-brand-600)' : 'rgba(255,255,255,0.1)',
-              color: '#FFFFFF',
-            }}
-            title="Request actual hardware GPS coordinates from device"
-          >
-            Hardware GPS
-          </button>
-        </div>
+        {/* GPS Refresh / Retry Control */}
+        <button
+          type="button"
+          onClick={requestDeviceGps}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '3px 9px',
+            fontSize: '11px',
+            fontWeight: 600,
+            borderRadius: 'var(--radius-pill)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            backgroundColor: 'rgba(255,255,255,0.08)',
+            color: '#E2E8F0',
+            cursor: 'pointer',
+          }}
+          title="Refresh hardware GPS position"
+        >
+          <RefreshCw size={11} className={geoStatus === 'acquiring' ? 'spin' : ''} />
+          <span>{geoStatus === 'denied' ? 'Retry GPS' : 'Refresh GPS'}</span>
+        </button>
       </div>
 
       {/* Main View Area */}
@@ -1050,48 +922,8 @@ export const ScannerView: React.FC = () => {
             >
               Verify PIN & Check In
             </button>
-
-            {activeSession?.pin && (
-              <div style={{ marginTop: '12px', fontSize: '11px', color: '#94A3B8' }}>
-                Coordinator demo PIN: <strong style={{ color: '#F8FAFC' }}>{activeSession.pin}</strong>
-              </div>
-            )}
           </form>
         )}
-      </div>
-
-      {/* Bottom Sticky Action Area with Simulate Scan Button */}
-      <div
-        style={{
-          padding: '14px 20px calc(14px + env(safe-area-inset-bottom, 0px)) 20px',
-          backgroundColor: 'rgba(0, 0, 0, 0.65)',
-          backdropFilter: 'blur(10px)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          zIndex: 20,
-        }}
-      >
-        <button
-          onClick={handleSimulateScan}
-          className="btn-primary"
-          style={{
-            width: '100%',
-            height: '48px',
-            backgroundColor: '#FFFFFF',
-            color: 'var(--color-brand-700)',
-            fontSize: '14px',
-            fontWeight: 700,
-            boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
-          }}
-        >
-          <Sparkles size={18} color="var(--color-brand-700)" />
-          <span>Simulate Scan ({isCheckedIn ? 'Check Out' : 'Check In'})</span>
-        </button>
-
-        <div style={{ textAlign: 'center', fontSize: '11px', color: '#94A3B8' }}>
-          Simulates live QR scan if no physical code or camera is within reach.
-        </div>
       </div>
 
       {/* Confirmation Bottom Sheet */}

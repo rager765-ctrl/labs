@@ -2,20 +2,15 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { StudentBottomNav } from '../../components/student/StudentBottomNav';
-import { Bell, Shield, RefreshCw, ChevronRight, Check, LogOut, LogIn, UserPlus } from 'lucide-react';
+import { Bell, Check, LogOut, LogIn, UserPlus } from 'lucide-react';
 
 export const StudentProfile: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, firebaseUser, logoutFirebase, switchRole, resetDemoData, addToast } = useApp();
+  const { currentUser, firebaseUser, logoutFirebase, addToast } = useApp();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [labReminders, setLabReminders] = useState(true);
   const [lateAlerts, setLateAlerts] = useState(false);
-
-  const handleRoleSwitch = () => {
-    switchRole('coordinator');
-    navigate('/coordinator');
-  };
 
   return (
     <div
@@ -293,69 +288,6 @@ export const StudentProfile: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
-
-        {/* Demo Controls Section */}
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--color-line)',
-            padding: '16px',
-            boxShadow: 'var(--shadow-card)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <Shield size={18} color="var(--color-brand-600)" />
-            <h2 style={{ fontSize: '14px', fontWeight: 700, margin: 0 }}>
-              Prototype Role & Data Management
-            </h2>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button
-              onClick={handleRoleSwitch}
-              className="btn-secondary"
-              style={{
-                width: '100%',
-                justifyContent: 'space-between',
-                height: '46px',
-                padding: '0 16px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Shield size={16} />
-                <span>Switch to Coordinator View (Dr. Vance)</span>
-              </div>
-              <ChevronRight size={16} />
-            </button>
-
-            <button
-              onClick={() => {
-                if (window.confirm('Reset all demo attendance records and restore initial state?')) {
-                  resetDemoData();
-                }
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                width: '100%',
-                height: '42px',
-                backgroundColor: '#FDECEE',
-                color: 'var(--color-danger-700)',
-                border: 'none',
-                borderRadius: 'var(--radius-pill)',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <RefreshCw size={14} />
-              <span>Reset All Demo Data</span>
-            </button>
-          </div>
         </div>
 
         {/* Support & Version */}

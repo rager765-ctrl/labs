@@ -1,13 +1,6 @@
 import type { User, LabSession, AttendanceRecord, CorrectionRequest, UserRole } from '../types';
-import {
-  CURRENT_STUDENT,
-  MOCK_STUDENTS,
-  createInitialSessions,
-  createInitialAttendanceRecords,
-  createInitialCorrections,
-} from './mockData';
 
-const STORAGE_KEY = 'attendance_platform_state_v1';
+const STORAGE_KEY = 'attendance_live_state_v2';
 
 export interface AppState {
   currentRole: UserRole;
@@ -21,16 +14,18 @@ export interface AppState {
 export function getInitialState(): AppState {
   return {
     currentRole: 'student',
-    currentUser: CURRENT_STUDENT,
-    students: MOCK_STUDENTS,
-    sessions: createInitialSessions(),
-    attendanceRecords: createInitialAttendanceRecords(),
-    corrections: createInitialCorrections(),
+    currentUser: null as any,
+    students: [],
+    sessions: [],
+    attendanceRecords: [],
+    corrections: [],
   };
 }
 
 export function loadStoredState(): AppState {
   try {
+    // Purge old mock storage
+    localStorage.removeItem('attendance_platform_state_v1');
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
       const initial = getInitialState();
@@ -38,12 +33,17 @@ export function loadStoredState(): AppState {
       return initial;
     }
     const parsed = JSON.parse(raw) as AppState;
+    // Discard any lingering mock users
+    if (parsed.currentUser?.id === 'user-student-1' || parsed.currentUser?.id === 'user-coord-1') {
+      const initial = getInitialState();
+      saveStoredState(initial);
+      return initial;
+    }
     if (!parsed.sessions || !parsed.attendanceRecords) {
       throw new Error('Incomplete storage schema');
     }
     return parsed;
   } catch (err) {
-    console.warn('Failed to load state from localStorage, falling back to initial fixtures', err);
     const initial = getInitialState();
     saveStoredState(initial);
     return initial;

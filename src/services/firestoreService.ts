@@ -9,13 +9,6 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { LabSession, AttendanceRecord, CorrectionRequest, SessionStatus } from '../types';
-import {
-  createInitialSessions,
-  createInitialAttendanceRecords,
-  createInitialCorrections,
-  MOCK_STUDENTS,
-  CURRENT_COORDINATOR,
-} from './mockData';
 
 // Firestore Collection Names
 export const SESSIONS_COLLECTION = 'sessions';
@@ -169,39 +162,14 @@ export const updateCorrectionInFirestore = async (
   await updateDoc(docRef, { status });
 };
 
-// Seed Firestore with initial demo fixtures if collection is empty
+// Check Firestore connectivity without injecting mock fixtures
 export const seedFirestoreIfEmpty = async (): Promise<boolean> => {
   try {
     const colRef = collection(db, SESSIONS_COLLECTION);
-    const snap = await getDocs(colRef);
-
-    if (snap.empty) {
-      console.log('Seeding initial fixtures to Firestore BaaS...');
-      const initialSessions = createInitialSessions();
-      for (const s of initialSessions) {
-        await setDoc(doc(db, SESSIONS_COLLECTION, s.id), s);
-      }
-
-      const initialAttendance = createInitialAttendanceRecords();
-      for (const a of initialAttendance) {
-        await setDoc(doc(db, ATTENDANCE_COLLECTION, a.id), a);
-      }
-
-      const initialCorrections = createInitialCorrections();
-      for (const c of initialCorrections) {
-        await setDoc(doc(db, CORRECTIONS_COLLECTION, c.id), c);
-      }
-
-      for (const u of MOCK_STUDENTS) {
-        await setDoc(doc(db, USERS_COLLECTION, u.id), u);
-      }
-      await setDoc(doc(db, USERS_COLLECTION, CURRENT_COORDINATOR.id), CURRENT_COORDINATOR);
-
-      return true;
-    }
+    await getDocs(colRef);
     return false;
   } catch (err) {
-    console.warn('Failed to seed Firestore fixtures:', err);
+    console.warn('Firestore connection check:', err);
     return false;
   }
 };

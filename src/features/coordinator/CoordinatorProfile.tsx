@@ -2,16 +2,11 @@ import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { CoordinatorNav } from '../../components/coordinator/CoordinatorNav';
-import { RefreshCw, UserCheck, ChevronRight, LogOut, LogIn } from 'lucide-react';
+import { LogOut, LogIn } from 'lucide-react';
 
 export const CoordinatorProfile: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, firebaseUser, logoutFirebase, switchRole, resetDemoData } = useApp();
-
-  const handleRoleSwitch = () => {
-    switchRole('student');
-    navigate('/student');
-  };
+  const { currentUser, firebaseUser, logoutFirebase } = useApp();
 
   return (
     <div className="coordinator-layout" style={{ backgroundColor: 'var(--color-brand-50)' }}>
@@ -19,10 +14,10 @@ export const CoordinatorProfile: React.FC = () => {
 
       <main className="coordinator-main">
         <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-ink-900)', margin: '0 0 4px 0' }}>
-          Coordinator Profile & Demo Settings
+          Coordinator Profile & Account
         </h1>
         <p style={{ fontSize: '13px', color: 'var(--color-ink-500)', margin: '0 0 20px 0' }}>
-          Laboratory supervisor credentials and prototype testing controls.
+          Laboratory supervisor credentials and account management.
         </p>
 
         {/* Profile Card */}
@@ -186,61 +181,6 @@ export const CoordinatorProfile: React.FC = () => {
               </Link>
             </div>
           )}
-        </div>
-
-        {/* Demo Switcher & Reset */}
-        <div className="card" style={{ padding: '20px', maxWidth: '600px' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 6px 0' }}>
-            Prototype Simulation Controls
-          </h2>
-          <p style={{ fontSize: '12px', color: 'var(--color-ink-500)', margin: '0 0 16px 0' }}>
-            Easily toggle between Student and Coordinator perspectives or reset local demo records.
-          </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <button
-              onClick={handleRoleSwitch}
-              className="btn-secondary"
-              style={{
-                width: '100%',
-                justifyContent: 'space-between',
-                height: '46px',
-                padding: '0 16px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <UserCheck size={18} />
-                <span>Switch to Student View (Alex Chen)</span>
-              </div>
-              <ChevronRight size={16} />
-            </button>
-
-            <button
-              onClick={() => {
-                if (window.confirm('Reset all demo attendance records and restore default clean data?')) {
-                  resetDemoData();
-                }
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                width: '100%',
-                height: '42px',
-                backgroundColor: '#FDECEE',
-                color: 'var(--color-danger-700)',
-                border: 'none',
-                borderRadius: 'var(--radius-pill)',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <RefreshCw size={14} />
-              <span>Reset All Demo Data to Defaults</span>
-            </button>
-          </div>
         </div>
       </main>
     </div>

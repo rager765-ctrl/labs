@@ -92,19 +92,13 @@ export const LoginPage: React.FC = () => {
         <div className="auth-role-note">
           <span className="auth-role-note__icon"><Info size={14} /></span>
           <span>
-            One sign-in for everyone. You'll go straight to your <strong>student</strong> or{' '}
-            <strong>coordinator</strong> dashboard based on your account.
+            Sign in with your university account credentials to access your laboratory schedule and attendance records.
           </span>
         </div>
       </form>
 
-      <div className="auth-footer" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div>
-          New student? <Link to="/signup" className="auth-link" id="login-to-signup">Create a student account</Link>
-        </div>
-        <div style={{ fontSize: '12px', color: 'var(--color-ink-400)' }}>
-          Lab Coordinator? <Link to="/coordinator-signup" className="auth-link" id="login-to-coordinator-signup">Register faculty account</Link>
-        </div>
+      <div className="auth-footer">
+        New student? <Link to="/signup" className="auth-link" id="login-to-signup">Create an account</Link>
       </div>
     </AuthLayout>
   );

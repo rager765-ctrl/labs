@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import QRCode from 'qrcode';
 import { useApp } from '../../context/AppContext';
 import { CoordinatorNav } from '../../components/coordinator/CoordinatorNav';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -10,7 +11,6 @@ import {
   Play,
   StopCircle,
   RefreshCw,
-  Sparkles,
   ArrowLeft,
   ChevronRight,
   Shield,
@@ -21,9 +21,10 @@ import { formatDistance } from '../../services/geoService';
 export const CoordinatorSessionLive: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { sessions, attendanceRecords, students, updateSessionStatus, simulateRandomArrival, addToast } = useApp();
+  const { sessions, attendanceRecords, students, updateSessionStatus, addToast } = useApp();
 
   const [qrRefreshKey, setQrRefreshKey] = useState(0);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
   const session = sessions.find(s => s.id === sessionId);
 
@@ -49,6 +50,27 @@ export const CoordinatorSessionLive: React.FC = () => {
     .filter(r => r.sessionId === session.id && (r.status === 'present' || r.status === 'late'))
     .sort((a, b) => new Date(b.checkedInAt || 0).getTime() - new Date(a.checkedInAt || 0).getTime());
 
+  // Generate genuine high-contrast QR code for this session
+  useEffect(() => {
+    if (!session) return;
+    const qrPayload = session.qrCode || session.id;
+    QRCode.toDataURL(qrPayload, {
+      width: 320,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF',
+      },
+      errorCorrectionLevel: 'M',
+    })
+      .then(url => {
+        setQrDataUrl(url);
+      })
+      .catch(err => {
+        console.error('Error generating session QR code:', err);
+      });
+  }, [session, qrRefreshKey]);
+
   const handleStartSession = () => {
     updateSessionStatus(session.id, 'live');
     addToast('Practical session is now LIVE. Students can scan to check in.', 'success', 'Session Started');
@@ -58,13 +80,6 @@ export const CoordinatorSessionLive: React.FC = () => {
     if (window.confirm('Are you sure you want to end this practical session? Final attendance will be marked.')) {
       updateSessionStatus(session.id, 'completed');
       addToast('Session finalized and moved to completed archives.', 'info', 'Session Ended');
-    }
-  };
-
-  const handleSimulateArrival = () => {
-    const student = simulateRandomArrival(session.id);
-    if (student) {
-      addToast(`Simulated arrival: ${student.name} marked Present`, 'success');
     }
   };
 
@@ -281,20 +296,20 @@ export const CoordinatorSessionLive: React.FC = () => {
                 }}
               >
                 <RefreshCw size={12} />
-                <span>Simulate Token Refresh</span>
+                <span>Refresh QR Code</span>
               </button>
             </div>
 
-            {/* Simulated Black and White QR Code Image / SVG with clear quiet zone */}
+            {/* Real High-Contrast Scannable QR Code */}
             <div
               key={qrRefreshKey}
               style={{
-                width: '210px',
-                height: '210px',
+                width: '220px',
+                height: '220px',
                 backgroundColor: '#FFFFFF',
                 border: '2px solid var(--color-ink-900)',
                 borderRadius: 'var(--radius-sm)',
-                padding: '12px',
+                padding: '10px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -303,43 +318,17 @@ export const CoordinatorSessionLive: React.FC = () => {
                 position: 'relative',
               }}
             >
-              {/* Authentic High-Contrast QR Code SVG */}
-              <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%' }}>
-                {/* 3 Corner Detection Patterns */}
-                {/* Top Left */}
-                <rect x="5" y="5" width="26" height="26" fill="#000000" rx="2" />
-                <rect x="9" y="9" width="18" height="18" fill="#FFFFFF" rx="1" />
-                <rect x="13" y="13" width="10" height="10" fill="#000000" rx="1" />
-
-                {/* Top Right */}
-                <rect x="69" y="5" width="26" height="26" fill="#000000" rx="2" />
-                <rect x="73" y="9" width="18" height="18" fill="#FFFFFF" rx="1" />
-                <rect x="77" y="13" width="10" height="10" fill="#000000" rx="1" />
-
-                {/* Bottom Left */}
-                <rect x="5" y="69" width="26" height="26" fill="#000000" rx="2" />
-                <rect x="9" y="73" width="18" height="18" fill="#FFFFFF" rx="1" />
-                <rect x="13" y="77" width="10" height="10" fill="#000000" rx="1" />
-
-                {/* Simulated Data Matrix modules */}
-                <rect x="36" y="8" width="6" height="6" fill="#000000" />
-                <rect x="46" y="8" width="6" height="6" fill="#000000" />
-                <rect x="56" y="8" width="6" height="6" fill="#000000" />
-                <rect x="36" y="20" width="6" height="6" fill="#000000" />
-                <rect x="48" y="22" width="8" height="8" fill="#000000" />
-
-                {/* Center cluster */}
-                <rect x="35" y="35" width="30" height="30" fill="#000000" rx="3" />
-                <rect x="40" y="40" width="20" height="20" fill="#FFFFFF" rx="2" />
-                <rect x="45" y="45" width="10" height="10" fill="#000000" rx="1" />
-
-                {/* Bottom details */}
-                <rect x="38" y="72" width="8" height="8" fill="#000000" />
-                <rect x="52" y="72" width="6" height="6" fill="#000000" />
-                <rect x="68" y="72" width="12" height="6" fill="#000000" />
-                <rect x="42" y="84" width="16" height="8" fill="#000000" />
-                <rect x="74" y="82" width="8" height="10" fill="#000000" />
-              </svg>
+              {qrDataUrl ? (
+                <img
+                  src={qrDataUrl}
+                  alt={`Scannable QR code for ${session.title}`}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+                />
+              ) : (
+                <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', display: 'grid', placeItems: 'center', height: '100%' }}>
+                  <span>Generating QR Code...</span>
+                </div>
+              )}
             </div>
 
             {/* PIN Code Box */}
@@ -358,36 +347,13 @@ export const CoordinatorSessionLive: React.FC = () => {
               <KeyRound size={16} color="var(--color-brand-700)" />
               <span style={{ fontSize: '12px', color: 'var(--color-ink-700)' }}>Session PIN:</span>
               <strong style={{ fontSize: '18px', letterSpacing: '4px', color: 'var(--color-brand-700)' }}>
-                {session.pin || '8492'}
+                {session.pin || '----'}
               </strong>
             </div>
 
-            <p style={{ fontSize: '11px', color: 'var(--color-ink-500)', margin: '0 0 16px 0', maxWidth: '300px' }}>
-              Project this screen or print the code for students arriving in {session.room}.
+            <p style={{ fontSize: '11px', color: 'var(--color-ink-500)', margin: '0 0 8px 0', maxWidth: '300px' }}>
+              Display this screen on the laboratory projector or terminal for students arriving in {session.room}.
             </p>
-
-            {/* Demo Simulation Action */}
-            <div
-              style={{
-                width: '100%',
-                padding: '12px',
-                backgroundColor: '#F8FAFC',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--color-line)',
-              }}
-            >
-              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-500)', marginBottom: '8px' }}>
-                DEMO TEST CONTROLS
-              </div>
-              <button
-                onClick={handleSimulateArrival}
-                className="btn-primary"
-                style={{ width: '100%', height: '40px', fontSize: '12px' }}
-              >
-                <Sparkles size={15} />
-                <span>Simulate Student Arrival</span>
-              </button>
-            </div>
           </div>
 
           {/* Realtime Arrival Feed */}

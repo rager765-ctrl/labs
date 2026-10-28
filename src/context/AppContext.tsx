@@ -16,7 +16,6 @@ import {
   resetStoredState,
 } from '../services/storage';
 import type { AppState } from '../services/storage';
-import { CURRENT_STUDENT, CURRENT_COORDINATOR } from '../services/mockData';
 import { initAnalytics } from '../services/firebase';
 import {
   listenToAuthChanges,
@@ -174,24 +173,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Realtime Firestore listeners
     const unsubSessions = subscribeToSessions((cloudSessions: LabSession[]) => {
-      if (cloudSessions.length > 0) {
-        setState(prev => ({ ...prev, sessions: cloudSessions }));
-        setIsCloudConnected(true);
-      }
+      setState(prev => ({ ...prev, sessions: cloudSessions }));
+      setIsCloudConnected(true);
     });
 
     const unsubAttendance = subscribeToAttendance((cloudAttendance: AttendanceRecord[]) => {
-      if (cloudAttendance.length > 0) {
-        setState(prev => ({ ...prev, attendanceRecords: cloudAttendance }));
-        setIsCloudConnected(true);
-      }
+      setState(prev => ({ ...prev, attendanceRecords: cloudAttendance }));
+      setIsCloudConnected(true);
     });
 
     const unsubCorrections = subscribeToCorrections((cloudCorrections: CorrectionRequest[]) => {
-      if (cloudCorrections.length > 0) {
-        setState(prev => ({ ...prev, corrections: cloudCorrections }));
-        setIsCloudConnected(true);
-      }
+      setState(prev => ({ ...prev, corrections: cloudCorrections }));
+      setIsCloudConnected(true);
     });
 
     return () => {
@@ -206,7 +199,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState(prev => ({
       ...prev,
       currentRole: role,
-      currentUser: role === 'student' ? CURRENT_STUDENT : CURRENT_COORDINATOR,
     }));
     addToast(`Switched view to ${role === 'student' ? 'Student mode' : 'Lab Coordinator mode'}`, 'info');
   }, [addToast]);
@@ -600,40 +592,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast(`Correction request ${status}`, status === 'approved' ? 'success' : 'info');
   }, [state.corrections, addToast]);
 
-  const simulateRandomArrival = useCallback((sessionId: string): User | null => {
-    const session = state.sessions.find(s => s.id === sessionId);
-    if (!session) return null;
-
-    const checkedInStudentIds = new Set(
-      state.attendanceRecords
-        .filter(r => r.sessionId === sessionId && (r.status === 'present' || r.status === 'late'))
-        .map(r => r.studentId)
-    );
-
-    const availableStudents = state.students.filter(s => !checkedInStudentIds.has(s.id));
-    if (availableStudents.length === 0) {
-      addToast('All eligible students are already checked in for this session!', 'info');
-      return null;
-    }
-
-    const randomIndex = Math.floor(Math.random() * availableStudents.length);
-    const chosenStudent = availableStudents[randomIndex];
-
-    let simulatedCoords: CheckInCoords | undefined = undefined;
-    if (session.geofence && session.geofence.enabled) {
-      // 0.0001 deg is approx 11m
-      const offsetLat = (Math.random() - 0.5) * 0.0002;
-      const offsetLng = (Math.random() - 0.5) * 0.0002;
-      simulatedCoords = {
-        latitude: session.geofence.latitude + offsetLat,
-        longitude: session.geofence.longitude + offsetLng,
-        accuracy: 8,
-      };
-    }
-
-    checkInStudent(sessionId, chosenStudent.id, 'Simulated Proximity Scan', simulatedCoords);
-    return chosenStudent;
-  }, [state.sessions, state.attendanceRecords, state.students, checkInStudent, addToast]);
+  const simulateRandomArrival = useCallback((_sessionId: string): User | null => {
+    return null;
+  }, []);
 
   const loginWithEmail = async (email: string, pass: string): Promise<User> => {
     try {
