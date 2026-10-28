@@ -11,9 +11,12 @@ import {
   History,
   Download,
   MapPin,
+  FileText,
 } from 'lucide-react';
-import { formatTime, formatFullDateTime } from '../../services/storage';
+import { formatTime, formatDate, formatFullDateTime } from '../../services/storage';
 import { formatDistance } from '../../services/geoService';
+import { exportSessionAttendanceCsv, buildSessionRosterPdfHtml } from '../../services/exportService';
+import { PdfReportModal } from '../../components/common/PdfReportModal';
 
 export const CoordinatorAttendanceManagement: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -30,6 +33,9 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
 
   // Audit history modal state
   const [viewingAuditStudentId, setViewingAuditStudentId] = useState<string | null>(null);
+
+  // PDF Preview & Extraction modal state
+  const [showPdfModal, setShowPdfModal] = useState(false);
 
   const session = sessions.find(s => s.id === sessionId);
 
@@ -55,7 +61,7 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
   const registeredStudents = students.filter(student => student.role === 'student' && sessionRosterIds.has(student.id));
 
   // Map each student with their attendance record
-  const studentRoster = registeredStudents.map(student => {
+  const allStudentRoster = registeredStudents.map(student => {
     const record = attendanceRecords.find(r => r.sessionId === session.id && r.studentId === student.id);
     const status: AttendanceStatus = record ? record.status : 'absent';
     return {
@@ -63,11 +69,13 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
       record,
       status,
     };
-  }).filter(item => {
+  });
+
+  const studentRoster = allStudentRoster.filter(item => {
     if (statusFilter !== 'all' && item.status !== statusFilter) return false;
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
-          return (item.student.name || '').toLowerCase().includes(q) || (item.student.studentId?.toLowerCase().includes(q) ?? false);
+    return (item.student.name || '').toLowerCase().includes(q) || (item.student.studentId?.toLowerCase().includes(q) ?? false);
   });
 
   const handleOpenEdit = (studentId: string, currentStatus: AttendanceStatus) => {
@@ -85,8 +93,21 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
     setReasonInput('');
   };
 
-  const handleExportRoster = () => {
-    addToast('Demo export: Attendance roster downloaded as CSV report', 'success', 'Export Ready');
+  const currentExportRoster = (searchQuery.trim() || statusFilter !== 'all') ? studentRoster : allStudentRoster;
+  const pdfHtml = buildSessionRosterPdfHtml(session, currentExportRoster);
+
+  const handleExportRosterCsv = () => {
+    try {
+      const { filename, rowCount } = exportSessionAttendanceCsv(session, currentExportRoster);
+      addToast(`Downloaded ${rowCount} attendee records to ${filename}`, 'success', 'CSV Export Complete');
+    } catch (err) {
+      console.error('Failed to export CSV:', err);
+      addToast('Could not generate CSV file. Please try again.', 'error');
+    }
+  };
+
+  const handleOpenPdfExtractor = () => {
+    setShowPdfModal(true);
   };
 
   const auditRecord = viewingAuditStudentId
@@ -136,14 +157,32 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
-              onClick={handleExportRoster}
+              onClick={handleExportRosterCsv}
               className="btn-secondary"
-              style={{ height: '38px', fontSize: '12px' }}
+              style={{ height: '38px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              title="Download CSV spreadsheet"
             >
               <Download size={14} />
-              <span>Export CSV (Demo)</span>
+              <span>Download CSV</span>
+            </button>
+            <button
+              onClick={handleOpenPdfExtractor}
+              className="btn-primary"
+              style={{
+                height: '38px',
+                fontSize: '12px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#2563EB',
+                borderColor: '#2563EB',
+              }}
+              title="Open formatted PDF report and extraction viewer"
+            >
+              <FileText size={14} />
+              <span>Extract PDF Report</span>
             </button>
           </div>
         </div>
@@ -508,6 +547,16 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Formatted PDF Report & Extraction Modal */}
+        <PdfReportModal
+          isOpen={showPdfModal}
+          onClose={() => setShowPdfModal(false)}
+          title={`Official Attendance Dossier: ${session.title}`}
+          subtitle={`${formatDate(session.startsAt)} • ${session.room} • ${currentExportRoster.length} Attendee Records`}
+          htmlContent={pdfHtml}
+          onDownloadCsv={handleExportRosterCsv}
+        />
       </main>
     </div>
   );

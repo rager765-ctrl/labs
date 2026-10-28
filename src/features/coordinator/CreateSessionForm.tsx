@@ -16,6 +16,7 @@ export const CreateSessionForm: React.FC = () => {
   const [title, setTitle] = useState('');
   const [labName, setLabName] = useState('Innovations Lab');
   const [room, setRoom] = useState('');
+  const [coordinatorName, setCoordinatorName] = useState('');
   const [date, setDate] = useState(() => {
     const d = new Date();
     return d.toISOString().split('T')[0];
@@ -51,6 +52,7 @@ export const CreateSessionForm: React.FC = () => {
     setTitle(editingSession.title);
     setLabName(editingSession.labName);
     setRoom(editingSession.room);
+    setCoordinatorName(editingSession.coordinatorName || '');
     setDate(toLocalDate(startsAt));
     setStartTime(toLocalTime(startsAt));
     setEndTime(toLocalTime(endsAt));
@@ -159,6 +161,7 @@ export const CreateSessionForm: React.FC = () => {
       title: title.trim(),
       labName: labName.trim(),
       room: room.trim(),
+      coordinatorName: coordinatorName.trim() ? coordinatorName.trim() : undefined,
       eligibleStudentIds: editingSession?.eligibleStudentIds || eligibleStudents.map(student => student.id),
       startsAt,
       endsAt,
@@ -329,6 +332,30 @@ export const CreateSessionForm: React.FC = () => {
               />
               {errors.room && <span style={{ fontSize: '11px', color: 'var(--color-danger-700)' }}>{errors.room}</span>}
             </div>
+          </div>
+
+          {/* Coordinator Name (Optional) */}
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+              Coordinator / Instructor Name <span style={{ fontWeight: 400, color: 'var(--color-ink-500)' }}>(Optional)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Dr. John Doe (leave blank if not applicable)"
+              value={coordinatorName}
+              onChange={(e) => setCoordinatorName(e.target.value)}
+              style={{
+                width: '100%',
+                height: '42px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--color-line)',
+                padding: '0 12px',
+                fontSize: '13px',
+              }}
+            />
+            <span style={{ fontSize: '11px', color: 'var(--color-ink-500)', marginTop: '3px', display: 'block' }}>
+              Displayed on attendee session cards and details when added.
+            </span>
           </div>
 
           {/* Geolocation & Physical Proximity Criteria Card */}

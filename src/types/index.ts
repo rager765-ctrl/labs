@@ -32,6 +32,7 @@ export interface LabSession {
   labName: string;
   room: string;
   coordinatorId: string;
+  coordinatorName?: string;
   eligibleStudentIds: string[];
   startsAt: string;
   endsAt: string;

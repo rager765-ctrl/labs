@@ -1,7 +1,7 @@
 import React from 'react';
 import type { LabSession } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
-import { Clock, MapPin, ChevronRight, Calendar } from 'lucide-react';
+import { Clock, MapPin, ChevronRight, Calendar, User } from 'lucide-react';
 import { formatTime, formatDate } from '../../services/storage';
 
 interface UpcomingSessionListProps {
@@ -90,6 +90,12 @@ export const UpcomingSessionList: React.FC<UpcomingSessionListProps> = ({ sessio
                 <MapPin size={12} />
                 {session.room}
               </span>
+              {session.coordinatorName && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <User size={12} />
+                  {session.coordinatorName}
+                </span>
+              )}
             </div>
           </div>
           <ChevronRight size={18} color="var(--color-ink-500)" style={{ flexShrink: 0 }} />

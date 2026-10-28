@@ -6,8 +6,11 @@ import {
   Download,
   AlertTriangle,
   CheckCircle2,
+  FileText,
 } from 'lucide-react';
 import { formatDate, calculateStudentAttendanceMetrics, calculateSessionMetrics } from '../../services/storage';
+import { exportAnalyticsReportCsv, buildAnalyticsReportPdfHtml } from '../../services/exportService';
+import { PdfReportModal } from '../../components/common/PdfReportModal';
 
 export const CoordinatorReports: React.FC = () => {
   const { sessions, attendanceRecords, students, addToast } = useApp();
@@ -58,8 +61,21 @@ export const CoordinatorReports: React.FC = () => {
 
   const studentsAtRisk = filteredSessions.length > 0 ? studentsWithRates.filter(s => s.metrics.rate < 75) : [];
 
-  const handleExportReport = () => {
-    addToast('Demo CSV report generated and downloaded to device', 'success', 'Export Complete');
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const pdfHtml = buildAnalyticsReportPdfHtml(sessionMetrics, studentsWithRates, cohortComplianceRate);
+
+  const handleExportCsv = () => {
+    try {
+      const { filename } = exportAnalyticsReportCsv(sessionMetrics, studentsWithRates, cohortComplianceRate);
+      addToast(`Downloaded analytics report to ${filename}`, 'success', 'CSV Download Complete');
+    } catch (err) {
+      console.error('Failed to export CSV report:', err);
+      addToast('Could not generate CSV report. Please try again.', 'error');
+    }
+  };
+
+  const handleOpenPdfModal = () => {
+    setShowPdfModal(true);
   };
 
   return (
@@ -78,14 +94,34 @@ export const CoordinatorReports: React.FC = () => {
             </p>
           </div>
 
-          <button
-            onClick={handleExportReport}
-            className="btn-primary"
-            style={{ height: '40px', fontSize: '13px' }}
-          >
-            <Download size={15} />
-            <span>Export Analytics CSV (Demo)</span>
-          </button>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={handleExportCsv}
+              className="btn-secondary"
+              style={{ height: '40px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              title="Download CSV spreadsheet"
+            >
+              <Download size={15} />
+              <span>Download CSV</span>
+            </button>
+            <button
+              onClick={handleOpenPdfModal}
+              className="btn-primary"
+              style={{
+                height: '40px',
+                fontSize: '13px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#2563EB',
+                borderColor: '#2563EB',
+              }}
+              title="Open formatted PDF report and extraction viewer"
+            >
+              <FileText size={15} />
+              <span>Extract PDF Report</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter Controls */}
@@ -274,6 +310,16 @@ export const CoordinatorReports: React.FC = () => {
             </table>
           </div>
         </div>
+
+        {/* Formatted PDF Analytics & Cohort Dossier Modal */}
+        <PdfReportModal
+          isOpen={showPdfModal}
+          onClose={() => setShowPdfModal(false)}
+          title="Attendance Analytics & Performance Dossier"
+          subtitle={`Innovations Lab • Overall Cohort Compliance: ${cohortComplianceRate}% • ${sessionMetrics.length} Sessions Analyzed`}
+          htmlContent={pdfHtml}
+          onDownloadCsv={handleExportCsv}
+        />
       </main>
     </div>
   );

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { LabSession, AttendanceRecord } from '../../types';
-import { QrCode, LogOut, CheckCircle2, Clock, MapPin, AlertCircle } from 'lucide-react';
+import { QrCode, LogOut, CheckCircle2, Clock, MapPin, AlertCircle, User } from 'lucide-react';
 import { formatTime } from '../../services/storage';
 
 interface CheckInActionCardProps {
@@ -113,6 +113,12 @@ export const CheckInActionCard: React.FC<CheckInActionCardProps> = ({
           <MapPin size={14} color="var(--color-ink-500)" />
           <span>{session.room}</span>
         </div>
+        {session.coordinatorName && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+            <User size={14} color="var(--color-ink-500)" />
+            <span>{session.coordinatorName}</span>
+          </div>
+        )}
         {session.geofence && session.geofence.enabled && (
           <div
             style={{

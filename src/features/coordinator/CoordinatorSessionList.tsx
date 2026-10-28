@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { CoordinatorNav } from '../../components/coordinator/CoordinatorNav';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import type { SessionStatus } from '../../types';
-import { PlusCircle, Search, Clock, MapPin, Users, ChevronRight, Play, Eye, Pencil, Trash2 } from 'lucide-react';
+import { PlusCircle, Search, Clock, MapPin, Users, ChevronRight, Play, Eye, Pencil, Trash2, User } from 'lucide-react';
 import { formatTime, formatDate, calculateSessionMetrics } from '../../services/storage';
 
 export const CoordinatorSessionList: React.FC = () => {
@@ -196,6 +196,12 @@ export const CoordinatorSessionList: React.FC = () => {
                       <MapPin size={14} color="var(--color-ink-500)" />
                       {session.room}
                     </span>
+                    {session.coordinatorName && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        <User size={14} color="var(--color-ink-500)" />
+                        {session.coordinatorName}
+                      </span>
+                    )}
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                       <Users size={14} color="var(--color-ink-500)" />
                       <strong>{m.totalArrived}</strong> / {m.totalExpected} Registered ({m.rate}%)

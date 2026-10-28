@@ -159,13 +159,15 @@ export const StudentSessionDetail: React.FC = () => {
               <strong style={{ color: 'var(--color-ink-900)' }}>{session.room}</strong>
             </div>
 
-            <div>
-              <div style={{ color: 'var(--color-ink-500)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
-                <UserIcon size={13} />
-                <span>Coordinator</span>
+            {session.coordinatorName ? (
+              <div>
+                <div style={{ color: 'var(--color-ink-500)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                  <UserIcon size={13} />
+                  <span>Coordinator</span>
+                </div>
+                <strong style={{ color: 'var(--color-ink-900)' }}>{session.coordinatorName}</strong>
               </div>
-              <strong style={{ color: 'var(--color-ink-900)' }}>Dr. Elena Vance</strong>
-            </div>
+            ) : null}
           </div>
 
           {/* Geolocation Verification Notice */}
