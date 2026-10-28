@@ -19,6 +19,7 @@ import {
   Link2,
 } from 'lucide-react';
 import { formatTime, calculateSessionMetrics } from '../../services/storage';
+import { CoordinatorFcmBanner } from '../../components/coordinator/CoordinatorFcmBanner';
 
 export const CoordinatorDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -125,6 +126,9 @@ export const CoordinatorDashboard: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Live Coordinator Push Notifications & Check-in Alert Banner */}
+        <CoordinatorFcmBanner />
 
         <section className="card" style={{ padding: '16px 18px', marginBottom: '22px' }} aria-labelledby="coordinator-onboarding-title">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap' }}>

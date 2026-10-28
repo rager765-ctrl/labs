@@ -51,6 +51,7 @@ import {
   notifySessionLive,
   notifySessionScheduled,
   notifyCorrectionDecision,
+  notifyCoordinatorAttendeeEvent,
   setupForegroundNotificationListener,
   pingBackendHealth,
 } from '../services/fcmClientService';
@@ -492,6 +493,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Could not sync attendance to Firestore:', err);
     });
 
+    // Notify coordinators of student arrival
+    const studentUser = state.students.find(s => s.id === studentId) || (state.currentUser?.id === studentId ? state.currentUser : undefined);
+    notifyCoordinatorAttendeeEvent({
+      type: 'checkin',
+      studentName: studentUser?.name || 'Attendee',
+      studentId,
+      sessionTitle: session.title,
+      sessionId: session.id,
+      status: finalStatus,
+    }).catch(err => {
+      console.warn('Could not fire coordinator check-in alert:', err);
+    });
+
     const distInfo = attendanceLocation ? ` (📍 ${formatDistance(attendanceLocation.distanceMeters)})` : '';
     addToast(
       isLate ? `Checked in as Late (${session.title})${distInfo}` : `Successfully checked in to ${session.title}!${distInfo}`,
@@ -594,6 +608,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Asynchronously update in Firestore
     saveAttendanceToFirestore(updatedRecord).catch((err: unknown) => {
       console.warn('Could not sync checkout to Firestore:', err);
+    });
+
+    // Notify coordinators of student departure
+    const studentUser = state.students.find(s => s.id === studentId) || (state.currentUser?.id === studentId ? state.currentUser : undefined);
+    notifyCoordinatorAttendeeEvent({
+      type: 'checkout',
+      studentName: studentUser?.name || 'Attendee',
+      studentId,
+      sessionTitle: session.title,
+      sessionId: session.id,
+    }).catch(err => {
+      console.warn('Could not fire coordinator check-out alert:', err);
     });
 
     addToast('Your departure has been recorded. Thank you!', 'success', 'Checked Out');
@@ -808,8 +834,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Could not sync correction request to Firestore:', err);
     });
 
+    // Notify coordinators that an issue/correction was submitted
+    const studentUser = state.students.find(s => s.id === record.studentId) || (state.currentUser?.id === record.studentId ? state.currentUser : undefined);
+    const sessionObj = state.sessions.find(s => s.id === record.sessionId);
+    notifyCoordinatorAttendeeEvent({
+      type: 'correction_submitted',
+      studentName: studentUser?.name || 'Attendee',
+      studentId: record.studentId,
+      sessionTitle: sessionObj?.title || 'Lab Session',
+      sessionId: record.sessionId,
+      reason,
+      status: requestedStatus,
+    }).catch(err => {
+      console.warn('Could not fire coordinator correction alert:', err);
+    });
+
     addToast('Correction request submitted to the lab coordinator for review', 'success', 'Request Sent');
-  }, [state.attendanceRecords, addToast]);
+  }, [state.attendanceRecords, state.students, state.sessions, state.currentUser, addToast]);
 
   const updateCorrectionStatus = useCallback((correctionId: string, status: 'approved' | 'rejected' | 'resolved') => {
     const correction = state.corrections.find(c => c.id === correctionId);

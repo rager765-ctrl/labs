@@ -93,7 +93,7 @@ router.get('/subscribers', async (req, res) => {
  */
 router.post('/register-token', requireFirebase, async (req, res) => {
   try {
-    const { uid, token, deviceName = 'Web Browser' } = req.body;
+    const { uid, token, deviceName = 'Web Browser', role = 'student' } = req.body;
 
     if (!uid || !token) {
       addLog('fail', 'Token registration rejected: missing uid or token in body.');
@@ -108,6 +108,7 @@ router.post('/register-token', requireFirebase, async (req, res) => {
       await userRef.set(
         {
           fcmTokens: admin.firestore.FieldValue.arrayUnion(token),
+          role,
           notificationsEnabled: true,
           lastActiveAt: new Date().toISOString(),
           lastDevice: deviceName,
@@ -116,17 +117,24 @@ router.post('/register-token', requireFirebase, async (req, res) => {
       );
     }
 
-    // Subscribe to broadcast topic 'all-students'
+    // Subscribe to topics according to role
     if (messaging && token) {
       try {
-        await messaging.subscribeToTopic([token], 'all-students');
+        if (role === 'coordinator') {
+          await messaging.subscribeToTopic([token], 'coordinators');
+          addLog('subscribe', `Subscribed token to topic 'coordinators' for UID: ${uid}`);
+        } else {
+          await messaging.subscribeToTopic([token], 'all-students');
+          addLog('subscribe', `Subscribed token to topic 'all-students' for UID: ${uid}`);
+        }
       } catch (topicErr) {
-        console.warn('Could not subscribe token to all-students topic:', topicErr.message);
+        console.warn('Could not subscribe token to topic:', topicErr.message);
       }
     }
 
-    addLog('subscribe', `User registered FCM token (UID: ${uid}, Device: "${deviceName}")`, {
+    addLog('subscribe', `${role === 'coordinator' ? 'Coordinator' : 'User'} registered FCM token (UID: ${uid}, Device: "${deviceName}")`, {
       uid,
+      role,
       deviceName,
       tokenPreview: `${token.slice(0, 16)}...`,
     });
@@ -134,6 +142,7 @@ router.post('/register-token', requireFirebase, async (req, res) => {
     return res.json({
       success: true,
       message: 'FCM token registered successfully.',
+      role,
     });
   } catch (error) {
     addLog('fail', `Error registering FCM token: ${error.message}`, { error: error.message, uid: req.body?.uid });
@@ -142,6 +151,112 @@ router.post('/register-token', requireFirebase, async (req, res) => {
       success: false,
       error: error.message || 'Failed to register token',
     });
+  }
+});
+
+/**
+ * POST /api/notifications/coordinator-alert
+ * Dispatches an alert to coordinators when attendees check in, check out, or submit issues
+ */
+router.post('/coordinator-alert', requireFirebase, async (req, res) => {
+  try {
+    const {
+      type, // 'checkin' | 'checkout' | 'correction_submitted' | 'issue_resolved'
+      studentName,
+      studentId,
+      sessionTitle,
+      sessionId,
+      status,
+      reason,
+    } = req.body;
+
+    let title = 'Innovations Lab Alert';
+    let body = 'New attendance event recorded.';
+    let url = sessionId ? `/coordinator/sessions/${sessionId}` : '/coordinator';
+
+    if (type === 'checkin') {
+      title = `🟢 Attendee Checked In: ${studentName || 'Student'}`;
+      body = `${studentName || 'Attendee'} checked in as ${status?.toUpperCase() || 'PRESENT'} for "${sessionTitle || 'Session'}".`;
+    } else if (type === 'checkout') {
+      title = `🔵 Attendee Checked Out: ${studentName || 'Student'}`;
+      body = `${studentName || 'Attendee'} checked out of "${sessionTitle || 'Session'}".`;
+    } else if (type === 'correction_submitted') {
+      title = `⚖️ New Issue Request: ${studentName || 'Student'}`;
+      body = `${studentName || 'Attendee'} submitted an attendance correction request for "${sessionTitle || 'Session'}".`;
+      url = '/coordinator';
+    } else if (type === 'issue_resolved') {
+      title = `✅ Issue Resolved: ${sessionTitle || 'Session'}`;
+      body = `Attendance issue for ${studentName || 'attendee'} was resolved (${status?.toUpperCase() || 'RESOLVED'}).`;
+    }
+
+    addLog('dispatch', `Coordinator push alert dispatched: "${title}" (Event: ${type})`, {
+      type,
+      studentName,
+      sessionTitle,
+    });
+
+    // Find all coordinators with registered FCM tokens
+    const coordTokens = [];
+    if (db) {
+      try {
+        const coordSnap = await db.collection('users').where('role', '==', 'coordinator').get();
+        coordSnap.forEach(docSnap => {
+          const d = docSnap.data();
+          if (Array.isArray(d.fcmTokens) && d.notificationsEnabled !== false) {
+            coordTokens.push(...d.fcmTokens);
+          }
+        });
+      } catch (err) {
+        console.warn('Error querying coordinators from Firestore:', err);
+      }
+    }
+
+    if (coordTokens.length > 0) {
+      const uniqueCoords = Array.from(new Set(coordTokens));
+      const response = await messaging.sendEachForMulticast({
+        tokens: uniqueCoords,
+        notification: { title, body },
+        data: { type: type || 'coordinator_alert', sessionId: sessionId || '', url },
+        webpush: { fcmOptions: { link: url } },
+      });
+
+      if (response.successCount > 0) {
+        addLog('success', `Delivered coordinator alert to ${response.successCount} coordinator device(s).`, {
+          type,
+          successCount: response.successCount,
+        });
+      }
+
+      if (response.failureCount > 0) {
+        addLog('fail', `Failed to deliver coordinator alert to ${response.failureCount} coordinator device(s).`, {
+          type,
+          failureCount: response.failureCount,
+        });
+      }
+
+      return res.json({
+        success: true,
+        mode: 'multicast_coordinators',
+        delivered: response.successCount,
+        failed: response.failureCount,
+      });
+    }
+
+    // Fallback: Send to 'coordinators' topic
+    const topic = 'coordinators';
+    const response = await messaging.send({
+      topic,
+      notification: { title, body },
+      data: { type: type || 'coordinator_alert', sessionId: sessionId || '', url },
+      webpush: { fcmOptions: { link: url } },
+    });
+
+    addLog('success', `Delivered coordinator alert via topic "${topic}". MessageId: ${response}`);
+    return res.json({ success: true, mode: 'topic_coordinators', messageId: response });
+  } catch (error) {
+    addLog('fail', `Error dispatching coordinator alert: ${error.message}`);
+    console.error('Error dispatching coordinator alert:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 

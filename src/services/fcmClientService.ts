@@ -45,7 +45,7 @@ export function getNotificationPermission(): NotificationPermission | 'unsupport
 /**
  * Requests notification permission, retrieves an FCM device token, and registers it with Firestore and Backend
  */
-export async function requestAndSubscribePush(uid: string): Promise<{ success: boolean; token?: string; error?: string }> {
+export async function requestAndSubscribePush(uid: string, role?: string): Promise<{ success: boolean; token?: string; error?: string }> {
   if (!isPushNotificationSupported()) {
     return { success: false, error: 'Push notifications are not supported in this browser.' };
   }
@@ -84,6 +84,7 @@ export async function requestAndSubscribePush(uid: string): Promise<{ success: b
         const userRef = doc(db, 'users', uid);
         await updateDoc(userRef, {
           fcmTokens: arrayUnion(currentToken),
+          role: role || 'student',
           notificationsEnabled: true,
           fcmSubscribedAt: new Date().toISOString(),
         });
@@ -101,6 +102,7 @@ export async function requestAndSubscribePush(uid: string): Promise<{ success: b
         body: JSON.stringify({
           uid,
           token: currentToken,
+          role: role || 'student',
           deviceName: navigator.userAgent.slice(0, 80),
         }),
       });
@@ -222,6 +224,21 @@ export async function notifyCorrectionDecision(params: {
     status: params.status,
     decisionReason: params.decisionReason,
   });
+}
+
+/**
+ * Dispatches an alert to coordinators when an attendee checks in, checks out, or submits an issue
+ */
+export async function notifyCoordinatorAttendeeEvent(params: {
+  type: 'checkin' | 'checkout' | 'correction_submitted' | 'issue_resolved';
+  studentName?: string;
+  studentId?: string;
+  sessionTitle?: string;
+  sessionId?: string;
+  status?: string;
+  reason?: string;
+}): Promise<void> {
+  await sendBackendNotification('coordinator-alert', params);
 }
 
 /**
