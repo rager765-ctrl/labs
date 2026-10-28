@@ -26,7 +26,7 @@ import {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const DEPARTMENTS = [
+export const DEPARTMENTS = [
   { value: 'School of Computing & Data Science', label: 'School of Computing & Data Science' },
   { value: 'Department of Computer Science', label: 'Department of Computer Science' },
   { value: 'Department of Information Technology', label: 'Department of Information Technology' },
@@ -35,7 +35,7 @@ const DEPARTMENTS = [
   { value: 'Faculty of Engineering & Technology', label: 'Faculty of Engineering & Technology' },
 ];
 
-const DESIGNATIONS = [
+export const DESIGNATIONS = [
   { value: 'Senior Lab Coordinator', label: 'Senior Lab Coordinator' },
   { value: 'Lead Course Coordinator', label: 'Lead Course Coordinator' },
   { value: 'Laboratory Instructor / TA', label: 'Laboratory Instructor / TA' },
@@ -155,6 +155,7 @@ export const CoordinatorSignupPage: React.FC = () => {
         staffId.trim().toUpperCase(),
         department,
         designation,
+        labRoom.trim(),
         inviteToken.trim() || undefined
       );
       navigate('/coordinator', { replace: true });

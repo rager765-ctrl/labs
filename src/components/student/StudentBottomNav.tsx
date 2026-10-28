@@ -1,36 +1,40 @@
-import React from 'react';
+﻿import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Home, History, User, ScanLine } from 'lucide-react';
 
 export const StudentBottomNav: React.FC = () => {
   return (
     <nav
+      className="mobile-nav-dock student-nav-dock"
       style={{
         position: 'fixed',
         bottom: 0,
         left: 0,
         right: 0,
         height: 'calc(var(--size-nav) + env(safe-area-inset-bottom, 0px))',
-        backgroundColor: 'var(--color-surface)',
-        borderTop: 'var(--border-hairline)',
+        backgroundColor: 'rgba(255, 255, 255, 0.07)',
+        borderTop: '1px solid rgba(255, 255, 255, 0.18)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-around',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        padding: '0 8px env(safe-area-inset-bottom, 0px)',
         zIndex: 40,
-        boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.04)',
+        boxShadow: '0 -6px 24px rgba(23, 34, 77, 0.08), inset 0 1px 0 rgba(255,255,255,0.22)',
+        backdropFilter: 'blur(22px) saturate(1.55)',
+        WebkitBackdropFilter: 'blur(22px) saturate(1.55)',
       }}
     >
       <div
         style={{
           display: 'flex',
           width: '100%',
-          maxWidth: 'var(--layout-content-max)',
+          maxWidth: '100%',
           justifyContent: 'space-around',
           margin: '0 auto',
         }}
       >
         <NavLink
+          className="nav-dock-item"
           to="/student"
           end
           style={({ isActive }) => ({
@@ -48,7 +52,7 @@ export const StudentBottomNav: React.FC = () => {
         >
           {({ isActive }) => (
             <>
-              <div
+              <div className="nav-dock-icon"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -68,6 +72,7 @@ export const StudentBottomNav: React.FC = () => {
         </NavLink>
 
         <NavLink
+          className="nav-dock-item"
           to="/student/scan"
           style={({ isActive }) => ({
             display: 'flex',
@@ -84,7 +89,7 @@ export const StudentBottomNav: React.FC = () => {
         >
           {({ isActive }) => (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '26px', borderRadius: 'var(--radius-pill)', backgroundColor: isActive ? 'var(--color-brand-100)' : 'transparent', transition: 'background-color 0.15s ease' }}>
+              <div className="nav-dock-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '26px', borderRadius: 'var(--radius-pill)', backgroundColor: isActive ? 'var(--color-brand-100)' : 'transparent', transition: 'background-color 0.15s ease' }}>
                 <ScanLine size={20} strokeWidth={isActive ? 2.5 : 1.8} />
               </div>
               <span style={{ fontSize: '11px', fontWeight: isActive ? 600 : 500 }}>Scan</span>
@@ -93,6 +98,7 @@ export const StudentBottomNav: React.FC = () => {
         </NavLink>
 
         <NavLink
+          className="nav-dock-item"
           to="/student/history"
           style={({ isActive }) => ({
             display: 'flex',
@@ -109,7 +115,7 @@ export const StudentBottomNav: React.FC = () => {
         >
           {({ isActive }) => (
             <>
-              <div
+              <div className="nav-dock-icon"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -129,6 +135,7 @@ export const StudentBottomNav: React.FC = () => {
         </NavLink>
 
         <NavLink
+          className="nav-dock-item"
           to="/student/profile"
           style={({ isActive }) => ({
             display: 'flex',
@@ -145,7 +152,7 @@ export const StudentBottomNav: React.FC = () => {
         >
           {({ isActive }) => (
             <>
-              <div
+              <div className="nav-dock-icon"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -167,3 +174,6 @@ export const StudentBottomNav: React.FC = () => {
     </nav>
   );
 };
+
+
+

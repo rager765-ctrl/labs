@@ -51,7 +51,7 @@
   --border-hairline: 1px solid var(--color-line);
   --shadow-card: 0 3px 12px rgba(35, 54, 120, 0.07);
   --shadow-sheet: 0 -8px 28px rgba(15, 20, 40, 0.18);
-  --shadow-button: 0 3px 8px rgba(40, 61, 184, 0.18);
+  --shadow-button: 0 2px 4px rgba(40, 61, 184, 0.09);
 
   /* Dimensions */
   --layout-page-inset: 16px;

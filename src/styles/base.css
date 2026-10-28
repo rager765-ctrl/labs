@@ -1,4 +1,4 @@
-@import './tokens.css';
+﻿@import './tokens.css';
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -29,6 +29,7 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow-x: clip;
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* Keep long labels and identifiers inside cards and flexible layouts. */
@@ -177,6 +178,87 @@ button:focus:not(:focus-visible) {
   box-shadow: none;
 }
 
+/* Floating glass navigation docks shared by mobile student and coordinator views. */
+.mobile-nav-dock,
+.coordinator-mobile-nav {
+  isolation: isolate;
+  overflow: visible;
+  backdrop-filter: blur(22px) saturate(1.55);
+  -webkit-backdrop-filter: blur(22px) saturate(1.55);
+}
+
+.mobile-nav-dock > div {
+  align-items: center;
+}
+
+.nav-dock-item {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 104px;
+  border-radius: 22px;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: color 180ms ease, transform 180ms cubic-bezier(.2,.8,.2,1);
+}
+
+.coordinator-dock-item {
+  max-width: 112px;
+}
+
+.nav-dock-icon {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+  transition: transform 200ms cubic-bezier(.2,.8,.2,1), background-color 180ms ease;
+}
+
+.nav-dock-icon > svg {
+  position: relative;
+  z-index: 1;
+}
+
+.nav-dock-icon::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: -10px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.20) 0%, rgba(139, 92, 246, 0.09) 42%, transparent 72%);
+  opacity: 0;
+  transform: scale(.55);
+  pointer-events: none;
+}
+
+.nav-dock-item:active {
+  transform: scale(.94);
+}
+
+.nav-dock-item:active .nav-dock-icon {
+  transform: scale(1.1);
+}
+
+.nav-dock-item:active .nav-dock-icon::after {
+  animation: navDockBubble 480ms ease-out both;
+}
+
+.nav-dock-item:focus-visible {
+  outline: 2px solid rgba(40, 61, 184, .48);
+  outline-offset: 2px;
+}
+
+@keyframes navDockBubble {
+  0% { opacity: 0; transform: scale(.55); }
+  28% { opacity: 1; }
+  100% { opacity: 0; transform: scale(2.1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-dock-item,
+  .nav-dock-icon { transition: none; }
+  .nav-dock-item:active .nav-dock-icon::after { animation: none; }
+}
+
 @media (hover: none) {
   .btn-primary:hover:not(:disabled) {
     background-color: var(--color-brand-700);
@@ -276,3 +358,4 @@ button:focus:not(:focus-visible) {
     padding: 16px var(--layout-page-inset) calc(var(--size-nav) + 24px) var(--layout-page-inset);
   }
 }
+

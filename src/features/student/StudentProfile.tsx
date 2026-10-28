@@ -1,12 +1,81 @@
-import React, { useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { StudentBottomNav } from '../../components/student/StudentBottomNav';
-import { Bell, Check, LogOut, LogIn, UserPlus } from 'lucide-react';
+import { Bell, Check, LogOut, LogIn, UserPlus, User, Mail, IdCard, GraduationCap, Layers, Pencil, X, Save } from 'lucide-react';
+import { AuthField, AuthSelect } from '../auth/AuthComponents';
+import { LEVELS, PROGRAMMES } from '../auth/SignupPage';
 
 export const StudentProfile: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, firebaseUser, logoutFirebase, addToast } = useApp();
+  const { currentUser, firebaseUser, logoutFirebase, addToast, updateCurrentUser } = useApp();
+
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profile, setProfile] = useState({
+    name: currentUser?.name || '',
+    email: currentUser?.email || '',
+    studentId: currentUser?.studentId || '',
+    programme: currentUser?.programme || '',
+    level: currentUser?.level || '',
+  });
+
+  useEffect(() => {
+    setProfile({
+      name: currentUser?.name || '',
+      email: currentUser?.email || '',
+      studentId: currentUser?.studentId || '',
+      programme: currentUser?.programme || '',
+      level: currentUser?.level || '',
+    });
+  }, [currentUser]);
+
+  const updateField = (field: keyof typeof profile, value: string) => {
+    setProfile(previous => ({ ...previous, [field]: value }));
+    setProfileError('');
+  };
+
+  const toggleProfileEditor = () => {
+    if (editingProfile) {
+      setProfile({
+        name: currentUser?.name || '',
+        email: currentUser?.email || '',
+        studentId: currentUser?.studentId || '',
+        programme: currentUser?.programme || '',
+        level: currentUser?.level || '',
+      });
+    }
+    setEditingProfile(value => !value);
+    setProfileError('');
+  };
+
+  const saveProfile = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (profile.name.trim().length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email.trim()) || !/^[A-Za-z0-9-]{4,}$/.test(profile.studentId.trim()) || !profile.programme || !profile.level) {
+      setProfileError('Complete each required field with a valid name, email, and student ID.');
+      return;
+    }
+    setSavingProfile(true);
+    setProfileError('');
+    try {
+      await updateCurrentUser({
+        name: profile.name.trim(),
+        email: profile.email.trim(),
+        studentId: profile.studentId.trim().toUpperCase(),
+        programme: profile.programme,
+        level: profile.level,
+      });
+      setEditingProfile(false);
+      addToast('Profile details updated', 'success');
+    } catch (error: any) {
+      setProfileError(error?.code === 'auth/requires-recent-login'
+        ? 'Sign in again before changing your email address.'
+        : error?.message || 'Unable to update your profile. Please try again.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [labReminders, setLabReminders] = useState(true);
@@ -48,6 +117,30 @@ export const StudentProfile: React.FC = () => {
             gap: '16px',
           }}
         >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '14px' }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0 }}>Student ID Card</h2>
+            <button type="button" className="btn-secondary" onClick={toggleProfileEditor} style={{ height: '36px', padding: '0 12px', gap: '6px' }}>
+              {editingProfile ? <X size={15} /> : <Pencil size={15} />}
+              <span>{editingProfile ? 'Cancel' : 'Edit details'}</span>
+            </button>
+          </div>
+          {editingProfile && (
+            <form onSubmit={saveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '14px', borderRadius: 'var(--radius-sm)', background: 'var(--color-brand-50)' }} noValidate>
+              <AuthField id="profile-name" label="Full name" autoComplete="name" placeholder="e.g. Alex Chen" icon={<User size={18} />} value={profile.name} onChange={event => updateField('name', event.target.value)} required />
+              <div className="auth-row auth-row--2">
+                <AuthField id="profile-email" label="University email" type="email" autoComplete="email" inputMode="email" placeholder="you@university.edu" icon={<Mail size={18} />} value={profile.email} onChange={event => updateField('email', event.target.value)} required />
+                <AuthField id="profile-student-id" label="Student ID" placeholder="STU-2024-8891" autoComplete="off" icon={<IdCard size={18} />} value={profile.studentId} onChange={event => updateField('studentId', event.target.value.toUpperCase())} required />
+              </div>
+              <div className="auth-row auth-row--2">
+                <AuthSelect id="profile-programme" label="Programme" icon={<GraduationCap size={18} />} placeholder="Select programme" options={PROGRAMMES} value={profile.programme} onChange={event => updateField('programme', event.target.value)} required />
+                <AuthSelect id="profile-level" label="Level" icon={<Layers size={18} />} placeholder="Select level" options={LEVELS} value={profile.level} onChange={event => updateField('level', event.target.value)} required />
+              </div>
+              {profileError && <p role="alert" style={{ color: 'var(--color-danger-700)', fontSize: '12px', margin: 0 }}>{profileError}</p>}
+              <button type="submit" className="btn-primary" disabled={savingProfile} style={{ alignSelf: 'flex-start', gap: '7px' }}>
+                <Save size={15} /> {savingProfile ? 'Saving...' : 'Save changes'}
+              </button>
+            </form>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div
               style={{
@@ -292,7 +385,7 @@ export const StudentProfile: React.FC = () => {
 
         {/* Support & Version */}
         <div style={{ textAlign: 'center', padding: '10px 0', fontSize: '11px', color: 'var(--color-ink-500)' }}>
-          <div>Attendance Platform MVP • University Lab Systems v1.0.0</div>
+          <div>Attendance Platform MVP â€¢ University Lab Systems v1.0.0</div>
           <div style={{ marginTop: '4px' }}>Complies with Laboratory Attendance Regulation 4.2</div>
         </div>
       </div>
@@ -301,3 +394,4 @@ export const StudentProfile: React.FC = () => {
     </div>
   );
 };
+

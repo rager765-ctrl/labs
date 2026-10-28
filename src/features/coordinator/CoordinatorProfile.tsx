@@ -1,12 +1,84 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { CoordinatorNav } from '../../components/coordinator/CoordinatorNav';
-import { LogOut, LogIn } from 'lucide-react';
+import { LogOut, LogIn, User, Mail, IdCard, Building2, Award, MapPin, Pencil, X, Save } from 'lucide-react';
+import { AuthField, AuthSelect } from '../auth/AuthComponents';
+import { DEPARTMENTS, DESIGNATIONS } from '../auth/CoordinatorSignupPage';
 
 export const CoordinatorProfile: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, firebaseUser, logoutFirebase } = useApp();
+  const { currentUser, firebaseUser, logoutFirebase, updateCurrentUser, addToast } = useApp();
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profile, setProfile] = useState({
+    name: currentUser?.name || '',
+    email: currentUser?.email || '',
+    staffId: currentUser?.studentId || '',
+    department: currentUser?.programme || '',
+    designation: currentUser?.level || '',
+    labRoom: currentUser?.labRoom || '',
+  });
+
+  useEffect(() => {
+    setProfile({
+      name: currentUser?.name || '',
+      email: currentUser?.email || '',
+      staffId: currentUser?.studentId || '',
+      department: currentUser?.programme || '',
+      designation: currentUser?.level || '',
+      labRoom: currentUser?.labRoom || '',
+    });
+  }, [currentUser]);
+
+  const updateField = (field: keyof typeof profile, value: string) => {
+    setProfile(previous => ({ ...previous, [field]: value }));
+    setProfileError('');
+  };
+
+  const toggleProfileEditor = () => {
+    if (editingProfile) {
+      setProfile({
+        name: currentUser?.name || '',
+        email: currentUser?.email || '',
+        staffId: currentUser?.studentId || '',
+        department: currentUser?.programme || '',
+        designation: currentUser?.level || '',
+        labRoom: currentUser?.labRoom || '',
+      });
+    }
+    setEditingProfile(value => !value);
+    setProfileError('');
+  };
+
+  const saveProfile = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (profile.name.trim().length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email.trim()) || !/^[A-Za-z0-9-]{3,}$/.test(profile.staffId.trim()) || !profile.department || !profile.designation) {
+      setProfileError('Complete each required field with a valid name, email, and staff ID.');
+      return;
+    }
+    setSavingProfile(true);
+    setProfileError('');
+    try {
+      await updateCurrentUser({
+        name: profile.name.trim(),
+        email: profile.email.trim(),
+        studentId: profile.staffId.trim().toUpperCase(),
+        programme: profile.department,
+        level: profile.designation,
+        labRoom: profile.labRoom.trim(),
+      });
+      setEditingProfile(false);
+      addToast('Profile details updated', 'success');
+    } catch (error: any) {
+      setProfileError(error?.code === 'auth/requires-recent-login'
+        ? 'Sign in again before changing your email address.'
+        : error?.message || 'Unable to update your profile. Please try again.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   return (
     <div className="coordinator-layout" style={{ backgroundColor: 'var(--color-brand-50)' }}>
@@ -22,6 +94,30 @@ export const CoordinatorProfile: React.FC = () => {
 
         {/* Profile Card */}
         <div className="card" style={{ padding: '24px', marginBottom: '20px', maxWidth: '600px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+            <button type="button" className="btn-secondary" onClick={toggleProfileEditor} style={{ height: '36px', padding: '0 12px', gap: '6px' }}>
+              {editingProfile ? <X size={15} /> : <Pencil size={15} />}
+              <span>{editingProfile ? 'Cancel' : 'Edit details'}</span>
+            </button>
+          </div>
+          {editingProfile && (
+            <form onSubmit={saveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '14px', marginBottom: '18px', borderRadius: 'var(--radius-sm)', background: 'var(--color-brand-50)' }} noValidate>
+              <AuthField id="coordinator-profile-name" label="Full Name & Academic Title" autoComplete="name" placeholder="e.g. Dr. Elena Vance" icon={<User size={18} />} value={profile.name} onChange={event => updateField('name', event.target.value)} required />
+              <div className="auth-row auth-row--2">
+                <AuthField id="coordinator-profile-email" label="Faculty / University Email" type="email" autoComplete="email" inputMode="email" placeholder="e.vance@university.edu" icon={<Mail size={18} />} value={profile.email} onChange={event => updateField('email', event.target.value)} required />
+                <AuthField id="coordinator-profile-staff-id" label="Staff / Faculty ID" placeholder="FAC-8042" autoComplete="off" icon={<IdCard size={18} />} value={profile.staffId} onChange={event => updateField('staffId', event.target.value.toUpperCase())} required />
+              </div>
+              <div className="auth-row auth-row--2">
+                <AuthSelect id="coordinator-profile-department" label="School / Department" icon={<Building2 size={18} />} placeholder="Select academic department" options={DEPARTMENTS} value={profile.department} onChange={event => updateField('department', event.target.value)} required />
+                <AuthSelect id="coordinator-profile-designation" label="Academic Title / Designation" icon={<Award size={18} />} placeholder="Select title" options={DESIGNATIONS} value={profile.designation} onChange={event => updateField('designation', event.target.value)} required />
+              </div>
+              <AuthField id="coordinator-profile-lab-room" label="Assigned Laboratory / Department Office" placeholder="e.g. Turing Hall, Advanced Databases Lab 304B" icon={<MapPin size={18} />} value={profile.labRoom} onChange={event => updateField('labRoom', event.target.value)} />
+              {profileError && <p role="alert" style={{ color: 'var(--color-danger-700)', fontSize: '12px', margin: 0 }}>{profileError}</p>}
+              <button type="submit" className="btn-primary" disabled={savingProfile} style={{ alignSelf: 'flex-start', gap: '7px' }}>
+                <Save size={15} /> {savingProfile ? 'Saving...' : 'Save changes'}
+              </button>
+            </form>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
             <div
               style={{
@@ -94,7 +190,7 @@ export const CoordinatorProfile: React.FC = () => {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--color-ink-500)' }}>Assigned Facilities:</span>
-              <strong style={{ color: 'var(--color-ink-900)' }}>Turing Hall Labs, Lovelace 201A</strong>
+              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser?.labRoom || 'Not specified'}</strong>
             </div>
           </div>
         </div>

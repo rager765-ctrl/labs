@@ -6,14 +6,14 @@ import { AuthLayout, AuthField, AuthSelect, PasswordStrength, passwordChecks, fr
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const PROGRAMMES = [
+export const PROGRAMMES = [
   { value: 'B.Sc. Computer Science', label: 'B.Sc. Computer Science' },
   { value: 'B.Sc. Information Technology', label: 'B.Sc. Information Technology' },
   { value: 'B.Eng. Electrical Engineering', label: 'B.Eng. Electrical Engineering' },
   { value: 'B.Sc. Data Science', label: 'B.Sc. Data Science' },
 ];
 
-const LEVELS = [
+export const LEVELS = [
   { value: 'Level 100', label: 'Level 100 (Year 1)' },
   { value: 'Level 200', label: 'Level 200 (Year 2)' },
   { value: 'Level 300', label: 'Level 300 (Year 3)' },

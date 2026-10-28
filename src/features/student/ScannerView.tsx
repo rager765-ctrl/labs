@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { X, Flashlight, Camera, KeyRound, AlertCircle, RefreshCw, SwitchCamera, Locate, CheckCircle2 } from 'lucide-react';
 import { ConfirmationSheet } from '../../components/common/ConfirmationSheet';
@@ -10,6 +10,7 @@ import jsQR from 'jsqr';
 
 export const ScannerView: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { sessions, currentUser, checkInStudent, checkOutStudent, attendanceRecords } = useApp();
 
   const [cameraPermission, setCameraPermission] = useState<'prompt' | 'granted' | 'denied' | 'unavailable'>('prompt');
@@ -42,7 +43,10 @@ export const ScannerView: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Identify today's active live or primary session
-  const activeSession = sessions.find(s => s.status === 'live') || sessions[0];
+  const requestedSessionId = searchParams.get('sessionId');
+  const activeSession = sessions.find(s => s.id === requestedSessionId && s.status === 'live')
+    || sessions.find(s => s.status === 'live')
+    || sessions[0];
 
   const applyCoordinates = useCallback((lat: number, lng: number, acc = 8) => {
     const coords = { latitude: lat, longitude: lng, accuracy: acc };

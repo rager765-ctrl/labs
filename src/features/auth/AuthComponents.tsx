@@ -1,5 +1,6 @@
 import React, { useId, useState } from 'react';
 import { Eye, EyeOff, AlertCircle, ShieldCheck, QrCode, BarChart3, Clock } from 'lucide-react';
+import { BrandMark } from '../../components/common/BrandMark';
 import './auth.css';
 
 /* ---------------- Layout ---------------- */
@@ -21,7 +22,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, wide, c
       </svg>
 
       <div className="auth-brand__logo">
-        <span className="auth-brand__logo-mark"><QrCode size={18} /></span>
+        <span className="auth-brand__logo-mark"><BrandMark size={22} /></span>
         <span>LabAttend</span>
       </div>
 

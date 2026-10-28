@@ -4,6 +4,7 @@ import {
   signOut,
   onAuthStateChanged,
   updateProfile,
+  updateEmail,
   deleteUser,
 } from 'firebase/auth';
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -83,6 +84,7 @@ export const signUpCoordinator = async (
   staffId: string,
   department: string,
   designation: string,
+  labRoom: string,
   inviteToken?: string
 ): Promise<User> => {
   const credential = await createUserWithEmailAndPassword(auth, email, password);
@@ -98,6 +100,7 @@ export const signUpCoordinator = async (
     studentId: staffId.trim() || `FAC-${fbUser.uid.substring(0, 6).toUpperCase()}`,
     programme: department.trim() || 'School of Computing & Data Science',
     level: designation.trim() || 'Senior Lab Coordinator',
+    labRoom: labRoom.trim(),
     onboardingInvite: inviteToken || undefined,
   };
 
@@ -117,6 +120,24 @@ export const signUpCoordinator = async (
   }
 
   return profile;
+};
+
+export const updateRegisteredProfile = async (
+  fbUser: FirebaseUser | null,
+  currentProfile: User,
+  changes: Partial<Pick<User, 'name' | 'email' | 'studentId' | 'programme' | 'level' | 'labRoom'>>
+): Promise<User> => {
+  if (fbUser) {
+    if (changes.name !== undefined && changes.name !== fbUser.displayName) {
+      await updateProfile(fbUser, { displayName: changes.name });
+    }
+    if (changes.email && changes.email.trim() !== (fbUser.email || '').trim()) {
+      await updateEmail(fbUser, changes.email.trim());
+    }
+    await setDoc(doc(db, 'users', fbUser.uid), changes, { merge: true });
+  }
+
+  return { ...currentProfile, ...changes };
 };
 
 export const signUpCoordinatorWithInvite = async (

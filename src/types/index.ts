@@ -12,6 +12,7 @@ export interface User {
   role: UserRole;
   programme?: string;
   level?: string;
+  labRoom?: string;
   avatarUrl?: string;
   onboardingInvite?: string;
 }

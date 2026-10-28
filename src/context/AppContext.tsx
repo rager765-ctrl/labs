@@ -24,6 +24,7 @@ import {
   signUpCoordinator,
   signOutUser,
   signUpCoordinatorWithInvite,
+  updateRegisteredProfile,
 } from '../services/authService';
 import {
   subscribeToSessions,
@@ -118,8 +119,10 @@ interface AppContextValue {
     staffId: string,
     department: string,
     designation: string,
+    labRoom: string,
     inviteToken?: string
   ) => Promise<User>;
+  updateCurrentUser: (changes: Partial<Pick<User, 'name' | 'email' | 'studentId' | 'programme' | 'level' | 'labRoom'>>) => Promise<void>;
   logoutFirebase: () => Promise<void>;
   syncToCloud: () => Promise<void>;
 }
@@ -762,6 +765,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     staffId: string,
     department: string,
     designation: string,
+    labRoom: string,
     inviteToken?: string
   ): Promise<User> => {
     try {
@@ -772,6 +776,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         staffId,
         department,
         designation,
+        labRoom,
         inviteToken
       );
       setState(prev => ({
@@ -785,6 +790,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast(err.message || 'Failed to create coordinator account', 'error', 'Registration Error');
       throw err;
     }
+  };
+
+  const updateCurrentUser = async (changes: Partial<Pick<User, 'name' | 'email' | 'studentId' | 'programme' | 'level' | 'labRoom'>>) => {
+    const profile = state.currentUser;
+    if (!profile) throw new Error('No signed-in profile is available to update.');
+    const updatedProfile = await updateRegisteredProfile(firebaseUser, profile, changes);
+    setState(prev => ({ ...prev, currentUser: updatedProfile }));
   };
 
   const logoutFirebase = async () => {
@@ -842,6 +854,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createCoordinatorInvite: createCoordinatorInviteLink,
         registerCoordinatorWithInvite: registerCoordinatorFromInvite,
         registerCoordinator,
+        updateCurrentUser,
         logoutFirebase,
         syncToCloud,
       }}

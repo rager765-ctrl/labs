@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { WelcomeHeader } from '../../components/student/WelcomeHeader';
-import { CheckInActionCard } from '../../components/student/CheckInActionCard';
+import { LiveSessionStack } from '../../components/student/LiveSessionStack';
 import { AttendanceOverview } from '../../components/student/AttendanceOverview';
 import { UpcomingSessionList } from '../../components/student/UpcomingSessionList';
 import { StudentBottomNav } from '../../components/student/StudentBottomNav';
@@ -12,34 +12,30 @@ import { ArrowRight, Sparkles } from 'lucide-react';
 export const StudentHome: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, sessions, attendanceRecords, checkOutStudent, addToast } = useApp();
-  const [checkingOut, setCheckingOut] = useState(false);
+  const [checkingOutSessionId, setCheckingOutSessionId] = useState<string | null>(null);
 
   const metrics = calculateStudentAttendanceMetrics(attendanceRecords, currentUser?.id || '');
 
-  // Today's primary live or upcoming session
-  const todayLiveSession = sessions.find(s => s.status === 'live');
-  const todayScheduledSession = sessions.find(s => s.status === 'scheduled');
-  const primarySession = todayLiveSession || todayScheduledSession || sessions[0] || null;
+  const today = new Date().toDateString();
+  const todayLiveSessions = sessions
+    .filter(session => session.status === 'live' && new Date(session.startsAt).toDateString() === today)
+    .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+  const upcomingSessions = sessions
+    .filter(session => session.status === 'scheduled')
+    .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
 
-  const primaryRecord = (primarySession && currentUser)
-    ? attendanceRecords.find(r => r.sessionId === primarySession.id && r.studentId === currentUser.id)
-    : undefined;
-
-  // Other upcoming sessions
-  const otherSessions = sessions.filter(s => s.id !== primarySession?.id && (s.status === 'live' || s.status === 'scheduled'));
-
-  const handleCheckIn = () => {
-    navigate('/student/scan');
+  const handleCheckIn = (session: (typeof sessions)[number]) => {
+    navigate(`/student/scan?sessionId=${encodeURIComponent(session.id)}`);
   };
 
-  const handleCheckOut = async () => {
-    if (!primarySession || !currentUser) return;
-    setCheckingOut(true);
+  const handleCheckOut = async (session: (typeof sessions)[number]) => {
+    if (!currentUser) return;
+    setCheckingOutSessionId(session.id);
     try {
-      const result = await checkOutStudent(primarySession.id, currentUser.id);
+      const result = await checkOutStudent(session.id, currentUser.id);
       if (!result.success) addToast(result.message, 'error', 'Check-out blocked');
     } finally {
-      setCheckingOut(false);
+      setCheckingOutSessionId(null);
     }
   };
 
@@ -78,7 +74,7 @@ export const StudentHome: React.FC = () => {
             gap: '16px',
           }}
         >
-          {/* Active Session & Check-In Action Card */}
+          {/* Swipeable stack of today's live sessions */}
           <section aria-labelledby="section-current-session">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
               <h2
@@ -91,9 +87,9 @@ export const StudentHome: React.FC = () => {
                   letterSpacing: '0.04em',
                 }}
               >
-                Today’s Lab Session
+                Today’s Live Lab Activities
               </h2>
-              {todayLiveSession && (
+              {todayLiveSessions.length > 0 && (
                 <span
                   style={{
                     display: 'inline-flex',
@@ -105,19 +101,18 @@ export const StudentHome: React.FC = () => {
                   }}
                 >
                   <Sparkles size={12} />
-                  <span>Check-In Open</span>
+                  <span>{todayLiveSessions.length} Live</span>
                 </span>
               )}
             </div>
-            <CheckInActionCard
-              session={primarySession}
-              attendanceRecord={primaryRecord}
-              onCheckInClick={handleCheckIn}
-              onCheckOutClick={handleCheckOut}
-          isCheckingOut={checkingOut}
-              onViewSessionClick={() => {
-                if (primarySession) navigate(`/student/sessions/${primarySession.id}`);
-              }}
+            <LiveSessionStack
+              sessions={todayLiveSessions}
+              attendanceRecords={attendanceRecords}
+              studentId={currentUser?.id}
+              checkingOutSessionId={checkingOutSessionId}
+              onCheckIn={handleCheckIn}
+              onCheckOut={handleCheckOut}
+              onView={(session) => navigate(`/student/sessions/${session.id}`)}
             />
           </section>
 
@@ -174,7 +169,7 @@ export const StudentHome: React.FC = () => {
               </button>
             </div>
             <UpcomingSessionList
-              sessions={otherSessions}
+              sessions={upcomingSessions}
               onSelectSession={(s) => navigate(`/student/sessions/${s.id}`)}
             />
           </section>
