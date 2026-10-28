@@ -9,7 +9,9 @@ export const CreateSessionForm: React.FC = () => {
   const navigate = useNavigate();
   const { createSession, updateSession, students, sessions } = useApp();
   const { sessionId } = useParams<{ sessionId: string }>();
-  const editingSession = sessions.find(session => session.id === sessionId);
+  const availableSessions = Array.isArray(sessions) ? sessions : [];
+  const eligibleStudents = Array.isArray(students) ? students : [];
+  const editingSession = availableSessions.find(session => session?.id === sessionId);
 
   const [title, setTitle] = useState('');
   const [courseCode, setCourseCode] = useState('CS302');
@@ -90,9 +92,10 @@ export const CreateSessionForm: React.FC = () => {
   }, [latitude, longitude]);
 
   // Check for potential room conflict
-  const hasRoomConflict = sessions.some(s => {
-    const sDate = s.startsAt.split('T')[0];
-    return s.id !== editingSession?.id && sDate === date && s.room.toLowerCase() === room.toLowerCase() && s.status !== 'completed' && s.status !== 'cancelled';
+  const hasRoomConflict = availableSessions.some(session => {
+    if (!session || typeof session.startsAt !== 'string' || typeof session.room !== 'string') return false;
+    const sessionDate = session.startsAt.split('T')[0];
+    return session.id !== editingSession?.id && sessionDate === date && session.room.toLowerCase() === room.toLowerCase() && session.status !== 'completed' && session.status !== 'cancelled';
   });
 
   const handleRequestDeviceLocation = async () => {
@@ -160,7 +163,7 @@ export const CreateSessionForm: React.FC = () => {
       courseCode: courseCode.trim().toUpperCase(),
       labName: labName.trim(),
       room: room.trim(),
-      eligibleStudentIds: editingSession?.eligibleStudentIds || students.map(s => s.id),
+      eligibleStudentIds: editingSession?.eligibleStudentIds || eligibleStudents.map(student => student.id),
       startsAt,
       endsAt,
       checkInOpensAt,
@@ -229,6 +232,12 @@ export const CreateSessionForm: React.FC = () => {
               {editingSession ? 'Update the session schedule, venue, attendance rules, and check-in options.' : 'Configure attendance parameters, eligible cohorts, check-in windows, and QR verification options.'}
           </p>
         </div>
+
+        {editingSession?.status === 'live' && (
+          <div style={{ marginBottom: '18px', padding: '12px 14px', border: '1px solid #FCD34D', borderRadius: 'var(--radius-sm)', background: 'var(--color-warning-100)', color: 'var(--color-warning-700)', fontSize: '12px' }}>
+            <strong>Attendance is in progress.</strong> Saved changes will apply to this live session immediately.
+          </div>
+        )}
 
         {/* Room Conflict Warning banner */}
         {hasRoomConflict && (

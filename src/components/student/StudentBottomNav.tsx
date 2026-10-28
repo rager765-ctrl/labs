@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, History, User } from 'lucide-react';
+import { Home, History, User, ScanLine } from 'lucide-react';
 
 export const StudentBottomNav: React.FC = () => {
   return (
@@ -63,6 +63,31 @@ export const StudentBottomNav: React.FC = () => {
                 <Home size={20} strokeWidth={isActive ? 2.5 : 1.8} />
               </div>
               <span style={{ fontSize: '11px', fontWeight: isActive ? 600 : 500 }}>Home</span>
+            </>
+          )}
+        </NavLink>
+
+        <NavLink
+          to="/student/scan"
+          style={({ isActive }) => ({
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '3px',
+            minWidth: '64px',
+            height: '48px',
+            textDecoration: 'none',
+            color: isActive ? 'var(--color-brand-700)' : 'var(--color-ink-500)',
+            transition: 'all 0.15s ease',
+          })}
+        >
+          {({ isActive }) => (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '26px', borderRadius: 'var(--radius-pill)', backgroundColor: isActive ? 'var(--color-brand-100)' : 'transparent', transition: 'background-color 0.15s ease' }}>
+                <ScanLine size={20} strokeWidth={isActive ? 2.5 : 1.8} />
+              </div>
+              <span style={{ fontSize: '11px', fontWeight: isActive ? 600 : 500 }}>Scan</span>
             </>
           )}
         </NavLink>

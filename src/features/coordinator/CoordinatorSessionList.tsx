@@ -224,7 +224,7 @@ export const CoordinatorSessionList: React.FC = () => {
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                      {session.status === 'scheduled' && (
+                      {(session.status === 'scheduled' || session.status === 'live') && (
                         <>
                           <button
                             type="button"

@@ -96,22 +96,26 @@ export const ScannerView: React.FC = () => {
   };
 
   // Process a detected QR code string
-  const handleDetectedCode = useCallback((codeText: string) => {
+  const handleDetectedCode = useCallback(async (codeText: string) => {
     if (hasScannedCode) return;
     setHasScannedCode(true);
     playBeep();
 
-    // Check if code matches any session or active session
-    const matchedSession = sessions.find(
-      s => s.qrCode === codeText || s.id === codeText || codeText.includes(s.pin || '____') || codeText.includes(s.courseCode || '')
-    ) || activeSession;
+    // Route only to the session whose unique ID or exact QR payload was scanned.
+    const normalizedCode = codeText.trim();
+    const sessionMatches = sessions.filter(
+      session => session.id === normalizedCode || session.qrCode?.trim() === normalizedCode
+    );
+    const matchedSession = sessionMatches.length === 1 ? sessionMatches[0] : null;
 
     if (!matchedSession) {
       setSheetConfig({
         isOpen: true,
         type: 'error',
         title: 'Unrecognized QR Code',
-        message: `Scanned: "${codeText.substring(0, 40)}". This code does not match any current university laboratory session.`,
+        message: sessionMatches.length > 1
+          ? 'This QR code is linked to more than one session. Ask the coordinator to regenerate the session QR code.'
+          : `Scanned: "${codeText.substring(0, 40)}". This code is not linked to a current laboratory session.`,
         primaryActionText: 'Scan Again',
         onPrimaryAction: () => {
           setHasScannedCode(false);
@@ -138,20 +142,30 @@ export const ScannerView: React.FC = () => {
 
     if (checkedIn && !currentRec.checkedOutAt && matchedSession.requiresCheckOut) {
       // Check out
-      const result = checkOutStudent(matchedSession.id, currentUser.id, studentCoords || undefined);
+      const result = await checkOutStudent(matchedSession.id, currentUser.id);
       setSheetConfig({
         isOpen: true,
         type: result.success ? 'success' : 'error',
-        title: result.success ? 'Checked Out Successfully' : 'Check-Out Notice',
+        title: result.success
+          ? 'Checked Out Successfully'
+          : result.code === 'geofence_out_of_range'
+          ? 'Location Verification Failed'
+          : 'Device Location Required',
         message: result.message,
         details: [
           { label: 'Practical', value: matchedSession.title },
           { label: 'Room', value: matchedSession.room },
-          { label: 'Exit Time', value: formatTime(new Date().toISOString()) },
           ...(result.distanceMeters !== undefined ? [{ label: 'Proximity', value: `${formatDistance(result.distanceMeters)} from venue` }] : []),
+          ...(result.success ? [{ label: 'Exit Time', value: formatTime(result.record?.checkedOutAt || new Date().toISOString()) }] : []),
         ],
-        primaryActionText: 'Return to Home',
-        onPrimaryAction: () => navigate('/student'),
+        primaryActionText: result.success ? 'Return to Home' : 'Try Again',
+        onPrimaryAction: () => {
+          if (result.success) navigate('/student');
+          else {
+            setHasScannedCode(false);
+            setSheetConfig(prev => ({ ...prev, isOpen: false }));
+          }
+        },
       });
     } else {
       // Check in

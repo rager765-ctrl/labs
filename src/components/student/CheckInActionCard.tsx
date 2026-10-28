@@ -8,6 +8,7 @@ interface CheckInActionCardProps {
   attendanceRecord?: AttendanceRecord;
   onCheckInClick: () => void;
   onCheckOutClick: () => void;
+  isCheckingOut?: boolean;
   onViewSessionClick: () => void;
 }
 
@@ -16,6 +17,7 @@ export const CheckInActionCard: React.FC<CheckInActionCardProps> = ({
   attendanceRecord,
   onCheckInClick,
   onCheckOutClick,
+  isCheckingOut = false,
   onViewSessionClick,
 }) => {
   if (!session) {
@@ -195,7 +197,7 @@ export const CheckInActionCard: React.FC<CheckInActionCardProps> = ({
         {/* Check Out Action */}
         <button
           onClick={onCheckOutClick}
-          disabled={!isCheckedIn || isCheckedOut}
+          disabled={!isCheckedIn || isCheckedOut || isCheckingOut}
           className="btn-secondary"
           style={{
             width: '100%',
@@ -210,11 +212,13 @@ export const CheckInActionCard: React.FC<CheckInActionCardProps> = ({
               ? 'Check in first to unlock check out'
               : isCheckedOut
               ? 'Already checked out'
-              : 'Tap to complete session checkout'
+              : isCheckingOut
+              ? 'Checking device location and completing checkout'
+              : 'Tap to verify your device location and complete checkout'
           }
         >
           <LogOut size={18} strokeWidth={2.2} />
-          <span>{isCheckedOut ? 'Checked Out' : 'Check Out'}</span>
+          <span>{isCheckedOut ? 'Checked Out' : isCheckingOut ? 'Verifying Location...' : 'Check Out'}</span>
         </button>
       </div>
 

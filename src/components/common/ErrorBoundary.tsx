@@ -26,9 +26,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   private handleReset = () => {
-    localStorage.removeItem('attendance_live_state_v2');
-    localStorage.removeItem('attendance_platform_state_v1');
-    window.location.href = '/login';
+    window.location.href = '/';
   };
 
   public render() {
@@ -129,7 +127,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 cursor: 'pointer',
               }}
             >
-              <span>Go to Sign In</span>
+              <span>Return Home</span>
             </button>
           </div>
         </div>

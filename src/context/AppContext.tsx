@@ -43,8 +43,8 @@ import {
 import type { CoordinatorInvite } from '../services/firestoreService';
 import {
   evaluateGeofenceProximity,
-  calculateHaversineDistanceMeters,
   formatDistance,
+  getDeviceCurrentPosition,
 } from '../services/geoService';
 import type { AttendanceLocation } from '../types';
 
@@ -75,6 +75,7 @@ export interface CheckInResult {
 
 export interface CheckOutResult {
   success: boolean;
+  code?: 'geolocation_required' | 'geofence_out_of_range';
   message: string;
   record?: AttendanceRecord;
   distanceMeters?: number;
@@ -97,7 +98,7 @@ interface AppContextValue {
   addToast: (message: string, type?: 'success' | 'error' | 'info', title?: string) => void;
   removeToast: (id: string) => void;
   checkInStudent: (sessionId: string, studentId: string, method?: string, coords?: CheckInCoords) => CheckInResult;
-  checkOutStudent: (sessionId: string, studentId: string, coords?: CheckInCoords) => CheckOutResult;
+  checkOutStudent: (sessionId: string, studentId: string) => Promise<CheckOutResult>;
   createSession: (session: Omit<LabSession, 'id' | 'status' | 'coordinatorId'>) => Promise<LabSession> | LabSession;
   updateSession: (sessionId: string, session: Omit<LabSession, 'id' | 'status' | 'coordinatorId'>) => void;
   deleteSession: (sessionId: string) => void;
@@ -381,11 +382,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [state.sessions, state.attendanceRecords, addToast]);
 
-  const checkOutStudent = useCallback((
+  const checkOutStudent = useCallback(async (
     sessionId: string,
-    studentId: string,
-    coords?: CheckInCoords
-  ): CheckOutResult => {
+    studentId: string
+  ): Promise<CheckOutResult> => {
     const existing = state.attendanceRecords.find(r => r.sessionId === sessionId && r.studentId === studentId);
     if (!existing || !existing.checkedInAt) {
       return { success: false, message: 'You must check in before checking out.' };
@@ -396,23 +396,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const session = state.sessions.find(s => s.id === sessionId);
-    const now = new Date().toISOString();
+    if (!session) return { success: false, message: 'This session could not be found.' };
 
-    let checkoutLocation: AttendanceLocation | undefined = undefined;
-    if (coords) {
-      const distance = session?.geofence
-        ? calculateHaversineDistanceMeters(coords.latitude, coords.longitude, session.geofence.latitude, session.geofence.longitude)
-        : 0;
-      const isWithin = session?.geofence ? distance <= session.geofence.radiusMeters : true;
-      checkoutLocation = {
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        accuracy: coords.accuracy || 10,
-        distanceMeters: distance,
-        isWithinGeofence: isWithin,
-        timestamp: now,
+    let position;
+    try {
+      position = await getDeviceCurrentPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    } catch (error) {
+      return {
+        success: false,
+        code: 'geolocation_required',
+        message: error instanceof Error ? error.message : 'Device location access is required to check out.',
       };
     }
+
+    const now = new Date().toISOString();
+
+    let distance = 0;
+    let isWithin = true;
+    if (session.geofence?.enabled) {
+      const proximity = evaluateGeofenceProximity(
+        position.latitude,
+        position.longitude,
+        position.accuracy,
+        session.geofence
+      );
+      distance = proximity.distanceMeters;
+      isWithin = proximity.isWithin;
+      if (!isWithin) {
+        return {
+          success: false,
+          code: 'geofence_out_of_range',
+          message: `Check-out blocked: you are ${formatDistance(distance)} from ${session.geofence.venueName || session.room}. Move within ${session.geofence.radiusMeters}m of the session location and try again.`,
+          distanceMeters: distance,
+          isWithinGeofence: false,
+        };
+      }
+    }
+
+    const checkoutLocation: AttendanceLocation = {
+      latitude: position.latitude,
+      longitude: position.longitude,
+      accuracy: position.accuracy,
+      distanceMeters: distance,
+      isWithinGeofence: isWithin,
+      timestamp: now,
+    };
 
     const updatedRecord: AttendanceRecord = {
       ...existing,
@@ -423,9 +451,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         {
           at: now,
           actorId: studentId,
-          action: checkoutLocation
-            ? `Student checked out [GPS: ${formatDistance(checkoutLocation.distanceMeters)} from venue]`
-            : 'Student checked out successfully',
+          action: `Student checked out [GPS: ${formatDistance(checkoutLocation.distanceMeters)} from venue; accuracy ±${checkoutLocation.accuracy}m]`,
         },
       ],
     };
@@ -453,7 +479,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [state.sessions, state.attendanceRecords, addToast]);
 
   const createSession = useCallback(async (data: Omit<LabSession, 'id' | 'status' | 'coordinatorId'>): Promise<LabSession> => {
-    const id = `session-${Date.now()}`;
+    const id = `session-${crypto.randomUUID()}`;
     const coordId = firebaseUser?.uid || state.currentUser?.id || 'coord-admin';
     const newSession: LabSession = {
       ...data,
@@ -461,7 +487,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       coordinatorId: coordId,
       status: 'scheduled',
       pin: Math.floor(1000 + Math.random() * 9000).toString(),
-      qrCode: `SESSION-${data.courseCode || 'LAB'}-${Date.now().toString().slice(-4)}`,
+      qrCode: `LABATTEND:${id}`,
     };
 
     setState(prev => ({

@@ -47,11 +47,11 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
     );
   }
 
-  // Eligible students for this session
-  const eligibleStudents = students.filter(s => session.eligibleStudentIds.includes(s.id));
+  // Manual roster includes every registered Firestore user whose role is student.
+  const registeredStudents = students.filter(student => student.role === 'student');
 
   // Map each student with their attendance record
-  const studentRoster = eligibleStudents.map(student => {
+  const studentRoster = registeredStudents.map(student => {
     const record = attendanceRecords.find(r => r.sessionId === session.id && r.studentId === student.id);
     const status: AttendanceStatus = record ? record.status : 'absent';
     return {
@@ -63,7 +63,7 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
     if (statusFilter !== 'all' && item.status !== statusFilter) return false;
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
-    return item.student.name.toLowerCase().includes(q) || (item.student.studentId?.toLowerCase().includes(q) ?? false);
+          return (item.student.name || '').toLowerCase().includes(q) || (item.student.studentId?.toLowerCase().includes(q) ?? false);
   });
 
   const handleOpenEdit = (studentId: string, currentStatus: AttendanceStatus) => {
@@ -288,7 +288,7 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
                             title="Manually adjust attendance record"
                           >
                             <Edit3 size={12} />
-                            <span>Mark</span>
+                            <span>{record ? 'Edit' : 'Mark'}</span>
                           </button>
 
                           {record?.audit && record.audit.length > 0 && (
@@ -349,7 +349,9 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 4px 0' }}>
-                Manual Attendance Recording
+                {attendanceRecords.some(record => record.sessionId === session.id && record.studentId === selectedStudentId)
+                  ? 'Edit Attendance Submission'
+                  : 'Manual Attendance Recording'}
               </h3>
               <p style={{ fontSize: '12px', color: 'var(--color-ink-500)', margin: '0 0 16px 0' }}>
                 Record exception, verified paper arrival, or medical absence with mandatory audit reason.
@@ -414,7 +416,9 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
                     className="btn-primary"
                     style={{ flex: 1, height: '42px', fontSize: '13px' }}
                   >
-                    Save & Record Audit
+                    {attendanceRecords.some(record => record.sessionId === session.id && record.studentId === selectedStudentId)
+                      ? 'Save Attendance Edit'
+                      : 'Save & Record Audit'}
                   </button>
                 </div>
               </form>

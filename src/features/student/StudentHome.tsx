@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { WelcomeHeader } from '../../components/student/WelcomeHeader';
@@ -12,6 +12,7 @@ import { ArrowRight, Sparkles } from 'lucide-react';
 export const StudentHome: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, sessions, attendanceRecords, checkOutStudent, addToast } = useApp();
+  const [checkingOut, setCheckingOut] = useState(false);
 
   const metrics = calculateStudentAttendanceMetrics(attendanceRecords, currentUser?.id || '');
 
@@ -31,11 +32,14 @@ export const StudentHome: React.FC = () => {
     navigate('/student/scan');
   };
 
-  const handleCheckOut = () => {
+  const handleCheckOut = async () => {
     if (!primarySession || !currentUser) return;
-    const result = checkOutStudent(primarySession.id, currentUser.id);
-    if (!result.success) {
-      addToast(result.message, 'error');
+    setCheckingOut(true);
+    try {
+      const result = await checkOutStudent(primarySession.id, currentUser.id);
+      if (!result.success) addToast(result.message, 'error', 'Check-out blocked');
+    } finally {
+      setCheckingOut(false);
     }
   };
 
@@ -110,6 +114,7 @@ export const StudentHome: React.FC = () => {
               attendanceRecord={primaryRecord}
               onCheckInClick={handleCheckIn}
               onCheckOutClick={handleCheckOut}
+          isCheckingOut={checkingOut}
               onViewSessionClick={() => {
                 if (primarySession) navigate(`/student/sessions/${primarySession.id}`);
               }}

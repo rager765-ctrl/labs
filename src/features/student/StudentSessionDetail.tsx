@@ -8,11 +8,12 @@ import { formatTime, formatDate, formatFullDateTime } from '../../services/stora
 export const StudentSessionDetail: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { sessions, attendanceRecords, currentUser, checkOutStudent, submitCorrectionRequest, corrections } = useApp();
+  const { sessions, attendanceRecords, currentUser, checkOutStudent, submitCorrectionRequest, corrections, addToast } = useApp();
 
   const [isReporting, setIsReporting] = useState(false);
   const [requestedStatus, setRequestedStatus] = useState<'present' | 'excused' | 'late'>('excused');
   const [reason, setReason] = useState('');
+  const [checkingOut, setCheckingOut] = useState(false);
 
   const session = sessions.find(s => s.id === sessionId);
   const studentRecord = (session && currentUser)
@@ -35,9 +36,14 @@ export const StudentSessionDetail: React.FC = () => {
   const isCheckedIn = studentRecord && (studentRecord.status === 'present' || studentRecord.status === 'late');
   const isCheckedOut = !!studentRecord?.checkedOutAt;
 
-  const handleCheckout = () => {
-    if (session && currentUser) {
-      checkOutStudent(session.id, currentUser.id);
+  const handleCheckout = async () => {
+    if (!session || !currentUser) return;
+    setCheckingOut(true);
+    try {
+      const result = await checkOutStudent(session.id, currentUser.id);
+      if (!result.success) addToast(result.message, 'error', 'Check-out blocked');
+    } finally {
+      setCheckingOut(false);
     }
   };
 
@@ -178,7 +184,7 @@ export const StudentSessionDetail: React.FC = () => {
             >
               <MapPin size={16} color="var(--color-brand-600)" />
               <div>
-                <strong>Geolocation Verification Required:</strong> Your device must be within {session.geofence.radiusMeters}m of {session.room} when scanning.
+                <strong>Geolocation Verification Required:</strong> Check-in and check-out require device location within {session.geofence.radiusMeters}m of {session.geofence.venueName || session.room}.
               </div>
             </div>
           )}
@@ -290,11 +296,12 @@ export const StudentSessionDetail: React.FC = () => {
               {session.status === 'live' && isCheckedIn && !isCheckedOut && session.requiresCheckOut && (
                 <button
                   onClick={handleCheckout}
+                  disabled={checkingOut}
                   className="btn-secondary"
                   style={{ width: '100%', height: '44px', marginTop: '8px' }}
                 >
                   <LogOut size={16} />
-                  <span>Check Out of Laboratory</span>
+                  <span>{checkingOut ? 'Verifying device location...' : 'Check Out of Laboratory'}</span>
                 </button>
               )}
 

@@ -28,6 +28,30 @@ export const CoordinatorSessionLive: React.FC = () => {
 
   const session = sessions.find(s => s.id === sessionId);
 
+  useEffect(() => {
+    if (!session) {
+      setQrDataUrl('');
+      return;
+    }
+
+    let cancelled = false;
+    const qrPayload = session.qrCode || session.id;
+    QRCode.toDataURL(qrPayload, {
+      width: 320,
+      margin: 2,
+      color: { dark: '#000000', light: '#FFFFFF' },
+      errorCorrectionLevel: 'M',
+    })
+      .then(url => {
+        if (!cancelled) setQrDataUrl(url);
+      })
+      .catch(err => {
+        if (!cancelled) console.error('Error generating session QR code:', err);
+      });
+
+    return () => { cancelled = true; };
+  }, [session?.id, session?.qrCode, qrRefreshKey]);
+
   if (!session) {
     return (
       <div className="coordinator-layout">
@@ -49,27 +73,6 @@ export const CoordinatorSessionLive: React.FC = () => {
   const arrivals = attendanceRecords
     .filter(r => r.sessionId === session.id && (r.status === 'present' || r.status === 'late'))
     .sort((a, b) => new Date(b.checkedInAt || 0).getTime() - new Date(a.checkedInAt || 0).getTime());
-
-  // Generate genuine high-contrast QR code for this session
-  useEffect(() => {
-    if (!session) return;
-    const qrPayload = session.qrCode || session.id;
-    QRCode.toDataURL(qrPayload, {
-      width: 320,
-      margin: 2,
-      color: {
-        dark: '#000000',
-        light: '#FFFFFF',
-      },
-      errorCorrectionLevel: 'M',
-    })
-      .then(url => {
-        setQrDataUrl(url);
-      })
-      .catch(err => {
-        console.error('Error generating session QR code:', err);
-      });
-  }, [session, qrRefreshKey]);
 
   const handleStartSession = () => {
     updateSessionStatus(session.id, 'live');
