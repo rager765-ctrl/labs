@@ -8,9 +8,7 @@ import {
   AlertTriangle,
   Send,
   Radio,
-  Settings2,
   RefreshCw,
-  Copy,
 } from 'lucide-react';
 import {
   requestAndSubscribePush,
@@ -18,8 +16,6 @@ import {
   getNotificationPermission,
   isPushNotificationSupported,
   sendTestPushAlert,
-  getBackendBaseUrl,
-  setBackendBaseUrl,
   FCM_SUBSCRIBED_KEY,
   FCM_TOKEN_STORAGE_KEY,
 } from '../../services/fcmClientService';
@@ -36,7 +32,7 @@ export const PushNotificationSettings: React.FC = () => {
   const [testingPush, setTestingPush] = useState<boolean>(false);
   const [testResult, setTestResult] = useState<{ status: 'idle' | 'success' | 'error'; message?: string }>({ status: 'idle' });
 
-  // Preferences
+  // Channel Preferences
   const [prefLiveSessions, setPrefLiveSessions] = useState<boolean>(() => {
     return localStorage.getItem('attendance_pref_live') !== 'false';
   });
@@ -46,11 +42,6 @@ export const PushNotificationSettings: React.FC = () => {
   const [prefCorrections, setPrefCorrections] = useState<boolean>(() => {
     return localStorage.getItem('attendance_pref_corrections') !== 'false';
   });
-
-  // Backend URL configuration toggle
-  const [showServerConfig, setShowServerConfig] = useState(false);
-  const [backendUrlInput, setBackendUrlInput] = useState(getBackendBaseUrl());
-  const [tokenCopied, setTokenCopied] = useState(false);
 
   useEffect(() => {
     const isSupp = isPushNotificationSupported();
@@ -81,6 +72,7 @@ export const PushNotificationSettings: React.FC = () => {
         const res = await unsubscribePush(uid);
         if (res.success) {
           setIsSubscribed(false);
+          setTestResult({ status: 'idle' });
           addToast('Unsubscribed from FCM push alerts.', 'info', 'Notifications Disabled');
         } else {
           addToast(res.error || 'Failed to unsubscribe.', 'error');
@@ -97,7 +89,7 @@ export const PushNotificationSettings: React.FC = () => {
         if (res.success) {
           setIsSubscribed(true);
           addToast(
-            'FCM push notification subscription active! You will now receive instant alerts.',
+            'FCM push notifications active! You will now receive instant alerts.',
             'success',
             'Subscribed'
           );
@@ -132,7 +124,7 @@ export const PushNotificationSettings: React.FC = () => {
       } else {
         setTestResult({
           status: 'success',
-          message: 'Local notification triggered (Render server waking up).',
+          message: 'Test notification sent to your device.',
         });
         addToast('Push notification test sent.', 'info', 'Notification Dispatched');
       }
@@ -143,26 +135,6 @@ export const PushNotificationSettings: React.FC = () => {
       setTestingPush(false);
     }
   };
-
-  const handleSaveBackendUrl = (e: React.FormEvent) => {
-    e.preventDefault();
-    setBackendBaseUrl(backendUrlInput);
-    addToast(`Backend notification server set to: ${getBackendBaseUrl()}`, 'success', 'Server Updated');
-  };
-
-  const handleCopyToken = () => {
-    const token = localStorage.getItem(FCM_TOKEN_STORAGE_KEY) || '';
-    if (!token) {
-      addToast('No active FCM token found on this device.', 'info');
-      return;
-    }
-    navigator.clipboard.writeText(token);
-    setTokenCopied(true);
-    addToast('FCM device registration token copied to clipboard!', 'info');
-    setTimeout(() => setTokenCopied(false), 2500);
-  };
-
-  const currentToken = localStorage.getItem(FCM_TOKEN_STORAGE_KEY);
 
   return (
     <div
@@ -372,7 +344,7 @@ export const PushNotificationSettings: React.FC = () => {
       {/* Notification Preference Channels */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-ink-500)' }}>
-          Notification Channels & Trigger Logic
+          Notification Channels
         </div>
 
         <label
@@ -472,8 +444,8 @@ export const PushNotificationSettings: React.FC = () => {
         </label>
       </div>
 
-      {/* Action Row: Send Test Notification & Server Settings Toggle */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '10px', paddingTop: '4px' }}>
+      {/* Action Row: Send Test Notification Only */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '12px', paddingTop: '4px' }}>
         <button
           type="button"
           className="btn-secondary"
@@ -492,136 +464,26 @@ export const PushNotificationSettings: React.FC = () => {
           <span>{testingPush ? 'Dispatching...' : 'Send Test Push Alert'}</span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => setShowServerConfig(!showServerConfig)}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--color-brand-700)',
-            fontSize: '12px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '6px 8px',
-          }}
-        >
-          <Settings2 size={13} />
-          <span>{showServerConfig ? 'Hide Server Configuration' : 'Server & Token Details'}</span>
-        </button>
+        {/* Test Status feedback */}
+        {testResult.status !== 'idle' && (
+          <div
+            style={{
+              fontSize: '12px',
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: testResult.status === 'success' ? 'var(--color-success-50)' : 'var(--color-danger-50)',
+              color: testResult.status === 'success' ? 'var(--color-success-800)' : 'var(--color-danger-800)',
+              border: `1px solid ${testResult.status === 'success' ? 'var(--color-success-200)' : 'var(--color-danger-200)'}`,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            {testResult.status === 'success' ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
+            <span>{testResult.message}</span>
+          </div>
+        )}
       </div>
-
-      {/* Test Status feedback */}
-      {testResult.status !== 'idle' && (
-        <div
-          style={{
-            fontSize: '12px',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-sm)',
-            backgroundColor: testResult.status === 'success' ? 'var(--color-success-50)' : 'var(--color-danger-50)',
-            color: testResult.status === 'success' ? 'var(--color-success-800)' : 'var(--color-danger-800)',
-            border: `1px solid ${testResult.status === 'success' ? 'var(--color-success-200)' : 'var(--color-danger-200)'}`,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-        >
-          {testResult.status === 'success' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-          <span>{testResult.message}</span>
-        </div>
-      )}
-
-      {/* Collapsible Backend Server & FCM Token Settings */}
-      {showServerConfig && (
-        <div
-          style={{
-            borderTop: '1px solid var(--color-line)',
-            paddingTop: '14px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-          }}
-        >
-          <form onSubmit={handleSaveBackendUrl} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-ink-700)' }}>
-              Render Backend API Endpoint
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="url"
-                value={backendUrlInput}
-                onChange={(e) => setBackendUrlInput(e.target.value)}
-                placeholder="https://your-app.onrender.com"
-                style={{
-                  flex: 1,
-                  height: '36px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--color-line)',
-                  padding: '0 10px',
-                  fontSize: '12px',
-                  fontFamily: 'monospace',
-                }}
-              />
-              <button
-                type="submit"
-                className="btn-primary"
-                style={{ height: '36px', padding: '0 14px', fontSize: '12px' }}
-              >
-                Save
-              </button>
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>
-              Points FCM dispatch requests to your deployed Render service. Default: <code>http://localhost:5000</code>.
-            </div>
-          </form>
-
-          {currentToken && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-ink-700)' }}>
-                  Device FCM Token
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopyToken}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--color-brand-700)',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}
-                >
-                  {tokenCopied ? <Check size={12} /> : <Copy size={12} />}
-                  <span>{tokenCopied ? 'Copied' : 'Copy Token'}</span>
-                </button>
-              </div>
-              <div
-                style={{
-                  fontFamily: 'monospace',
-                  fontSize: '10px',
-                  color: 'var(--color-ink-600)',
-                  backgroundColor: 'var(--color-ink-50)',
-                  border: '1px solid var(--color-line)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '6px 8px',
-                  wordBreak: 'break-all',
-                  maxHeight: '60px',
-                  overflowY: 'auto',
-                }}
-              >
-                {currentToken}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };
