@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: attendance-backend
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FIREBASE_PROJECT_ID
+        value: attendance-9a7f5
+      - key: CORS_ORIGIN
+        sync: false
+        # Enter your frontend Vercel or custom URL here
+      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+        sync: false
+        # Paste your service account JSON string here in Render dashboard

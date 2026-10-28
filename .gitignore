@@ -27,7 +27,9 @@ dist-ssr
 .firebase/
 firestore.rules
 *.rules
-firebase-debug.log*
-firestore-debug.log*
-ui-debug.log*
-
+# Secrets & Firebase Service Accounts
+serviceAccountKey.json
+service-account*.json
+.env
+.env.*
+!.env.example

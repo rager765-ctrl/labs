@@ -1,0 +1,30 @@
+{
+  "name": "attendance-backend",
+  "version": "1.0.0",
+  "description": "FCM Push Notification and API backend for Innovations Lab Attendance",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "attendance",
+    "fcm",
+    "firebase-admin",
+    "express",
+    "render"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "firebase-admin": "^13.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
