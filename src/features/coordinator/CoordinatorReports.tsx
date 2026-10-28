@@ -7,10 +7,12 @@ import {
   AlertTriangle,
   CheckCircle2,
   FileText,
+  Activity,
 } from 'lucide-react';
 import { formatDate, calculateStudentAttendanceMetrics, calculateSessionMetrics } from '../../services/storage';
 import { exportAnalyticsReportCsv, buildAnalyticsReportPdfHtml } from '../../services/exportService';
 import { PdfReportModal } from '../../components/common/PdfReportModal';
+import { FcmActivityModal } from '../../components/coordinator/FcmActivityModal';
 
 export const CoordinatorReports: React.FC = () => {
   const { sessions, attendanceRecords, students, addToast } = useApp();
@@ -62,6 +64,7 @@ export const CoordinatorReports: React.FC = () => {
   const studentsAtRisk = filteredSessions.length > 0 ? studentsWithRates.filter(s => s.metrics.rate < 75) : [];
 
   const [showPdfModal, setShowPdfModal] = useState(false);
+  const [showFcmModal, setShowFcmModal] = useState(false);
   const pdfHtml = buildAnalyticsReportPdfHtml(sessionMetrics, studentsWithRates, cohortComplianceRate);
 
   const handleExportCsv = () => {
@@ -120,6 +123,15 @@ export const CoordinatorReports: React.FC = () => {
             >
               <FileText size={15} />
               <span>Extract PDF Report</span>
+            </button>
+            <button
+              onClick={() => setShowFcmModal(true)}
+              className="btn-secondary"
+              style={{ height: '40px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              title="View live FCM push logs and server self-ping status"
+            >
+              <Activity size={15} color="var(--color-brand-600)" />
+              <span>FCM Push Logs</span>
             </button>
           </div>
         </div>
@@ -319,6 +331,12 @@ export const CoordinatorReports: React.FC = () => {
           subtitle={`Innovations Lab • Overall Cohort Compliance: ${cohortComplianceRate}% • ${sessionMetrics.length} Sessions Analyzed`}
           htmlContent={pdfHtml}
           onDownloadCsv={handleExportCsv}
+        />
+
+        {/* Live FCM Activity & Push Logs Modal */}
+        <FcmActivityModal
+          isOpen={showFcmModal}
+          onClose={() => setShowFcmModal(false)}
         />
       </main>
     </div>

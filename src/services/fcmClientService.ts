@@ -273,3 +273,51 @@ export async function setupForegroundNotificationListener(
     return null;
   }
 }
+
+/**
+ * Pings backend health endpoint to verify connectivity and keep Render awake
+ */
+export async function pingBackendHealth(): Promise<{ healthy: boolean; data?: any }> {
+  try {
+    const backendUrl = getBackendBaseUrl();
+    const res = await fetch(`${backendUrl}/health`, {
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (!res.ok) return { healthy: false };
+    const data = await res.json();
+    return { healthy: true, data };
+  } catch (err) {
+    return { healthy: false };
+  }
+}
+
+/**
+ * Fetches recent in-memory FCM dispatch, subscription, and failure logs from backend
+ */
+export async function fetchNotificationLogs(limit = 40): Promise<any[]> {
+  try {
+    const backendUrl = getBackendBaseUrl();
+    const res = await fetch(`${backendUrl}/api/notifications/logs?limit=${limit}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.logs || [];
+  } catch (err) {
+    console.warn('Could not fetch notification logs from backend:', err);
+    return [];
+  }
+}
+
+/**
+ * Fetches active FCM subscriber stats from backend
+ */
+export async function fetchNotificationSubscribers(): Promise<{ totalSubscribers: number; totalDevices: number; subscribers: any[] }> {
+  try {
+    const backendUrl = getBackendBaseUrl();
+    const res = await fetch(`${backendUrl}/api/notifications/subscribers`);
+    if (!res.ok) return { totalSubscribers: 0, totalDevices: 0, subscribers: [] };
+    return await res.json();
+  } catch (err) {
+    return { totalSubscribers: 0, totalDevices: 0, subscribers: [] };
+  }
+}

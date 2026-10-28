@@ -13,6 +13,7 @@ import express from 'express';
 import cors from 'cors';
 import healthRoutes from './routes/health.js';
 import notificationRoutes from './routes/notifications.js';
+import { startSelfPing } from './services/selfPingService.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -79,6 +80,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`📡 Health check available at: http://localhost:${PORT}/health`);
   console.log(`🔔 FCM Notification endpoints at: http://localhost:${PORT}/api/notifications`);
   console.log(`===============================================`);
+
+  // Initialize keep-alive self-ping for Render
+  startSelfPing();
 });
 
 // Graceful Shutdown

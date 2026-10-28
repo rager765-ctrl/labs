@@ -52,6 +52,7 @@ import {
   notifySessionScheduled,
   notifyCorrectionDecision,
   setupForegroundNotificationListener,
+  pingBackendHealth,
 } from '../services/fcmClientService';
 import type { AttendanceLocation } from '../types';
 
@@ -264,6 +265,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
   }, [addToast]);
+
+  // Client keep-alive ping for backend service on Render
+  useEffect(() => {
+    pingBackendHealth().catch(() => {});
+    const interval = setInterval(() => {
+      pingBackendHealth().catch(() => {});
+    }, 10 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Close expired sessions and record roster members who never checked in. Coordinators reconcile
   // the full roster; students can also record their own missed status when their app is active.
