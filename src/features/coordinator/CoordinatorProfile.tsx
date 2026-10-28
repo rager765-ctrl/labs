@@ -1,12 +1,12 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { CoordinatorNav } from '../../components/coordinator/CoordinatorNav';
-import { RefreshCw, UserCheck, ChevronRight } from 'lucide-react';
+import { RefreshCw, UserCheck, ChevronRight, LogOut, LogIn } from 'lucide-react';
 
 export const CoordinatorProfile: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, switchRole, resetDemoData } = useApp();
+  const { currentUser, firebaseUser, logoutFirebase, switchRole, resetDemoData } = useApp();
 
   const handleRoleSwitch = () => {
     switchRole('student');
@@ -102,6 +102,90 @@ export const CoordinatorProfile: React.FC = () => {
               <strong style={{ color: 'var(--color-ink-900)' }}>Turing Hall Labs, Lovelace 201A</strong>
             </div>
           </div>
+        </div>
+
+        {/* Account & Session Section */}
+        <div className="card" style={{ padding: '20px', marginBottom: '20px', maxWidth: '600px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--color-ink-900)' }}>
+              Coordinator Account & Authentication
+            </h2>
+            {firebaseUser ? (
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: 'var(--color-success-700)',
+                  backgroundColor: 'var(--color-success-100)',
+                  padding: '2px 8px',
+                  borderRadius: 'var(--radius-pill)',
+                }}
+              >
+                Cloud Synced
+              </span>
+            ) : (
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: 'var(--color-ink-500)',
+                  backgroundColor: 'var(--color-brand-50)',
+                  padding: '2px 8px',
+                  borderRadius: 'var(--radius-pill)',
+                }}
+              >
+                Demo Coordinator
+              </span>
+            )}
+          </div>
+
+          {firebaseUser ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ fontSize: '13px', color: 'var(--color-ink-700)' }}>
+                Authenticated as: <strong>{firebaseUser.email}</strong>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  await logoutFirebase();
+                  navigate('/login');
+                }}
+                className="btn-secondary"
+                style={{
+                  width: '100%',
+                  height: '40px',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  color: 'var(--color-danger-700)',
+                }}
+              >
+                <LogOut size={16} />
+                <span>Sign Out of Faculty Account</span>
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--color-ink-500)', margin: 0 }}>
+                You are currently previewing coordinator actions with the local demo profile (Dr. Elena Vance). Sign in to your coordinator account to manage live classes in the cloud.
+              </p>
+              <Link
+                to="/login"
+                className="btn-primary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  height: '40px',
+                  fontSize: '13px',
+                  textDecoration: 'none',
+                }}
+              >
+                <LogIn size={16} />
+                <span>Sign In to Coordinator Account</span>
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Demo Switcher & Reset */}

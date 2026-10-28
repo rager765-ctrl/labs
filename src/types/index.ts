@@ -13,6 +13,16 @@ export interface User {
   programme?: string;
   level?: string;
   avatarUrl?: string;
+  onboardingInvite?: string;
+}
+
+export interface GeofenceConfig {
+  enabled: boolean;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number; // e.g. 50m, 100m
+  venueName?: string;
+  strictEnforcement: boolean; // if true, rejects attendance outside geofence; if false, records proximity warning
 }
 
 export interface LabSession {
@@ -33,6 +43,7 @@ export interface LabSession {
   qrCode?: string;
   description?: string;
   notes?: string;
+  geofence?: GeofenceConfig;
 }
 
 export interface AttendanceAuditEntry {
@@ -40,6 +51,15 @@ export interface AttendanceAuditEntry {
   actorId: string;
   action: string;
   reason?: string;
+}
+
+export interface AttendanceLocation {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  distanceMeters: number;
+  isWithinGeofence: boolean;
+  timestamp: string;
 }
 
 export interface AttendanceRecord {
@@ -52,6 +72,8 @@ export interface AttendanceRecord {
   note?: string;
   updatedBy: string;
   audit: AttendanceAuditEntry[];
+  location?: AttendanceLocation;
+  checkoutLocation?: AttendanceLocation;
 }
 
 export interface CorrectionRequest {

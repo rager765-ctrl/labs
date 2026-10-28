@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { StudentBottomNav } from '../../components/student/StudentBottomNav';
-import { Bell, Shield, RefreshCw, ChevronRight, Check } from 'lucide-react';
+import { Bell, Shield, RefreshCw, ChevronRight, Check, LogOut, LogIn, UserPlus } from 'lucide-react';
 
 export const StudentProfile: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, switchRole, resetDemoData, addToast } = useApp();
+  const { currentUser, firebaseUser, logoutFirebase, switchRole, resetDemoData, addToast } = useApp();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [labReminders, setLabReminders] = useState(true);
@@ -199,6 +199,100 @@ export const StudentProfile: React.FC = () => {
               />
             </label>
           </div>
+        </div>
+
+        {/* Account & Session Section */}
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--color-line)',
+            padding: '16px',
+            boxShadow: 'var(--shadow-card)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <h2 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--color-ink-900)' }}>
+              Account & Sign In
+            </h2>
+            {firebaseUser ? (
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: 'var(--color-success-700)',
+                  backgroundColor: 'var(--color-success-100)',
+                  padding: '2px 8px',
+                  borderRadius: 'var(--radius-pill)',
+                }}
+              >
+                Cloud Synced
+              </span>
+            ) : (
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: 'var(--color-ink-500)',
+                  backgroundColor: 'var(--color-brand-50)',
+                  padding: '2px 8px',
+                  borderRadius: 'var(--radius-pill)',
+                }}
+              >
+                Demo Profile
+              </span>
+            )}
+          </div>
+
+          {firebaseUser ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--color-ink-700)' }}>
+                Signed in as <strong>{firebaseUser.email}</strong>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  await logoutFirebase();
+                  navigate('/login');
+                }}
+                className="btn-secondary"
+                style={{
+                  width: '100%',
+                  height: '40px',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  color: 'var(--color-danger-700)',
+                }}
+              >
+                <LogOut size={15} />
+                <span>Sign Out of Account</span>
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--color-ink-500)', margin: '0 0 4px 0' }}>
+                You are currently viewing student mode as a simulated user. Sign in to your university student account to access your live cloud records.
+              </p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Link
+                  to="/login"
+                  className="btn-primary"
+                  style={{ flex: 1, height: '40px', fontSize: '12px', textDecoration: 'none' }}
+                >
+                  <LogIn size={15} />
+                  <span>Sign In</span>
+                </Link>
+                <Link
+                  to="/signup"
+                  className="btn-secondary"
+                  style={{ flex: 1, height: '40px', fontSize: '12px', textDecoration: 'none' }}
+                >
+                  <UserPlus size={15} />
+                  <span>Register</span>
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Demo Controls Section */}

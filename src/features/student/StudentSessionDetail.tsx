@@ -159,6 +159,28 @@ export const StudentSessionDetail: React.FC = () => {
             </div>
           </div>
 
+          {/* Geolocation Verification Notice */}
+          {session.geofence && session.geofence.enabled && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px 12px',
+                backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '12px',
+                color: 'var(--color-ink-800)',
+              }}
+            >
+              <MapPin size={16} color="var(--color-brand-600)" />
+              <div>
+                <strong>Geolocation Verification Required:</strong> Your device must be within {session.geofence.radiusMeters}m of {session.room} when scanning.
+              </div>
+            </div>
+          )}
+
           {/* Description & Requirements */}
           {session.description && (
             <div>

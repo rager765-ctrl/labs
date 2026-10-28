@@ -14,12 +14,20 @@ import {
   ChevronRight,
   AlertTriangle,
   Play,
+  UserPlus,
+  Copy,
+  Link2,
 } from 'lucide-react';
 import { formatTime, calculateSessionMetrics } from '../../services/storage';
 
 export const CoordinatorDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, sessions, attendanceRecords, students, corrections, updateSessionStatus } = useApp();
+  const { currentUser, sessions, attendanceRecords, students, corrections, updateSessionStatus, createCoordinatorInvite, addToast } = useApp();
+  const [onboardingOpen, setOnboardingOpen] = React.useState(false);
+  const [inviteLink, setInviteLink] = React.useState('');
+  const [inviteExpiry, setInviteExpiry] = React.useState('');
+  const [generatingInvite, setGeneratingInvite] = React.useState(false);
+  const [inviteError, setInviteError] = React.useState('');
 
   const todayStr = new Date().toDateString();
 
@@ -47,6 +55,34 @@ export const CoordinatorDashboard: React.FC = () => {
   const handleStartSession = (sessionId: string) => {
     updateSessionStatus(sessionId, 'live');
     navigate(`/coordinator/sessions/${sessionId}`);
+  };
+
+  const toggleCoordinatorOnboarding = async () => {
+    if (onboardingOpen) {
+      setOnboardingOpen(false);
+      return;
+    }
+    setOnboardingOpen(true);
+    setGeneratingInvite(true);
+    setInviteError('');
+    try {
+      const invite = await createCoordinatorInvite();
+      setInviteLink(`${window.location.origin}/coordinator-signup?invite=${encodeURIComponent(invite.token)}`);
+      setInviteExpiry(new Date(invite.expiresAt.toMillis()).toLocaleString());
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : 'Could not create an onboarding link.');
+    } finally {
+      setGeneratingInvite(false);
+    }
+  };
+
+  const copyInviteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      addToast('Coordinator onboarding link copied.', 'success', 'Link copied');
+    } catch {
+      addToast('Could not copy automatically. Select and copy the link.', 'error', 'Copy failed');
+    }
   };
 
   return (
@@ -79,6 +115,42 @@ export const CoordinatorDashboard: React.FC = () => {
             </button>
           </div>
         </div>
+
+        <section className="card" style={{ padding: '16px 18px', marginBottom: '22px' }} aria-labelledby="coordinator-onboarding-title">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+              <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--color-brand-100)', color: 'var(--color-brand-700)', display: 'grid', placeItems: 'center' }}>
+                <UserPlus size={19} />
+              </div>
+              <div>
+                <h2 id="coordinator-onboarding-title" style={{ margin: 0, fontSize: '15px', color: 'var(--color-ink-900)' }}>Onboard coordinators</h2>
+                <p style={{ margin: '3px 0 0', fontSize: '12px', color: 'var(--color-ink-500)' }}>Create a single-use signup link for a new lab coordinator.</p>
+              </div>
+            </div>
+            <button type="button" className={onboardingOpen ? 'btn-secondary' : 'btn-primary'} onClick={toggleCoordinatorOnboarding} aria-expanded={onboardingOpen} style={{ height: '40px', fontSize: '12px' }}>
+              <Link2 size={15} />
+              <span>{onboardingOpen ? 'Hide onboarding link' : 'Generate coordinator link'}</span>
+            </button>
+          </div>
+
+          {onboardingOpen && (
+            <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--color-line)' }}>
+              {generatingInvite ? (
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-ink-600)' }}>Generating a secure invite link…</p>
+              ) : inviteError ? (
+                <div role="alert" style={{ color: 'var(--color-danger-700)', fontSize: '12px' }}>{inviteError}</div>
+              ) : inviteLink ? (
+                <>
+                  <label htmlFor="coordinator-invite-link" style={{ display: 'block', marginBottom: '6px', fontSize: '11px', fontWeight: 700, color: 'var(--color-ink-600)' }}>Single-use signup link · expires {inviteExpiry}</label>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <input id="coordinator-invite-link" readOnly value={inviteLink} style={{ flex: 1, minWidth: '240px', height: '40px', border: '1px solid var(--color-line)', borderRadius: 'var(--radius-sm)', padding: '0 10px', fontSize: '12px', color: 'var(--color-ink-700)' }} />
+                    <button type="button" className="btn-secondary" onClick={copyInviteLink} style={{ height: '40px', fontSize: '12px' }}><Copy size={14} /> Copy link</button>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          )}
+        </section>
 
         {/* 4 Metric Cards Grid */}
         <div

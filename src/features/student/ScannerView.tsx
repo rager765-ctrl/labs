@@ -1,20 +1,33 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { X, Flashlight, Camera, KeyRound, Sparkles, AlertCircle } from 'lucide-react';
+import { X, Flashlight, Camera, KeyRound, Sparkles, AlertCircle, RefreshCw, SwitchCamera, Locate, CheckCircle2 } from 'lucide-react';
 import { ConfirmationSheet } from '../../components/common/ConfirmationSheet';
 import type { ConfirmationSheetProps } from '../../components/common/ConfirmationSheet';
 import { formatTime } from '../../services/storage';
+import { getDeviceCurrentPosition, evaluateGeofenceProximity, formatDistance } from '../../services/geoService';
+import jsQR from 'jsqr';
 
 export const ScannerView: React.FC = () => {
   const navigate = useNavigate();
   const { sessions, currentUser, checkInStudent, checkOutStudent, attendanceRecords } = useApp();
 
-  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [cameraPermission, setCameraPermission] = useState<'prompt' | 'granted' | 'denied' | 'unavailable'>('prompt');
+  const [cameraErrorMsg, setCameraErrorMsg] = useState<string>('');
+  const [cameraReady, setCameraReady] = useState(false);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [torchOn, setTorchOn] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [activeTab, setActiveTab] = useState<'camera' | 'pin'>('camera');
   const [pinError, setPinError] = useState('');
+  const [hasScannedCode, setHasScannedCode] = useState(false);
+
+  // Geolocation & Proximity State
+  const [studentCoords, setStudentCoords] = useState<{ latitude: number; longitude: number; accuracy: number } | null>(null);
+  const [geoStatus, setGeoStatus] = useState<'acquiring' | 'verified' | 'out_of_range' | 'denied' | 'disabled'>('acquiring');
+  const [geoDistance, setGeoDistance] = useState<number | null>(null);
+  const [geoErrorMsg, setGeoErrorMsg] = useState<string>('');
+  const [proximitySimMode, setProximitySimMode] = useState<'real' | 'sim_inside' | 'sim_outside'>('sim_inside');
 
   // Confirmation sheet state
   const [sheetConfig, setSheetConfig] = useState<Omit<ConfirmationSheetProps, 'isOpen' | 'onClose'> & { isOpen: boolean }>({
@@ -26,6 +39,8 @@ export const ScannerView: React.FC = () => {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Identify today's active live or primary session
   const activeSession = sessions.find(s => s.status === 'live') || sessions[0];
@@ -34,45 +49,307 @@ export const ScannerView: React.FC = () => {
     : undefined;
   const isCheckedIn = studentRecord && (studentRecord.status === 'present' || studentRecord.status === 'late');
 
-  // Request camera on mount if camera tab is active
+  const applyCoordinates = useCallback((lat: number, lng: number, acc = 8) => {
+    const coords = { latitude: lat, longitude: lng, accuracy: acc };
+    setStudentCoords(coords);
+    if (activeSession?.geofence && activeSession.geofence.enabled) {
+      const evalRes = evaluateGeofenceProximity(lat, lng, acc, activeSession.geofence);
+      setGeoDistance(evalRes.distanceMeters);
+      setGeoStatus(evalRes.isWithin ? 'verified' : 'out_of_range');
+    } else {
+      setGeoStatus('verified');
+      setGeoDistance(null);
+    }
+  }, [activeSession]);
+
   useEffect(() => {
-    let isMounted = true;
+    if (!activeSession) return;
 
-    async function initCamera() {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        if (isMounted) setHasCameraPermission(false);
-        return;
+    if (proximitySimMode === 'sim_inside') {
+      // 12m from venue: Guaranteed verified within room
+      if (activeSession.geofence && activeSession.geofence.enabled) {
+        applyCoordinates(activeSession.geofence.latitude + 0.00008, activeSession.geofence.longitude + 0.00006, 6);
+      } else {
+        applyCoordinates(37.774929, -122.419416, 6);
       }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
+    } else if (proximitySimMode === 'sim_outside') {
+      // 450m from venue: Tests honest rejection beyond geofence
+      if (activeSession.geofence && activeSession.geofence.enabled) {
+        applyCoordinates(activeSession.geofence.latitude + 0.0038, activeSession.geofence.longitude + 0.0035, 12);
+      } else {
+        applyCoordinates(37.780000, -122.410000, 12);
+      }
+    } else {
+      // Real Hardware GPS
+      setGeoStatus('acquiring');
+      getDeviceCurrentPosition({ enableHighAccuracy: true, timeout: 8000, maximumAge: 15000 })
+        .then(pos => {
+          applyCoordinates(pos.latitude, pos.longitude, pos.accuracy);
+        })
+        .catch(err => {
+          console.warn('GPS hardware access:', err.message);
+          setGeoStatus('denied');
+          setGeoErrorMsg(err.message);
+          setStudentCoords(null);
         });
-        if (!isMounted) {
-          stream.getTracks().forEach(t => t.stop());
-          return;
+    }
+  }, [proximitySimMode, activeSession, applyCoordinates]);
+
+  // Play subtle feedback beep using Web Audio API on successful scan
+  const playBeep = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.18);
+    } catch {
+      // AudioContext not allowed or not supported
+    }
+  };
+
+  // Process a detected QR code string
+  const handleDetectedCode = useCallback((codeText: string) => {
+    if (hasScannedCode) return;
+    setHasScannedCode(true);
+    playBeep();
+
+    // Check if code matches any session or active session
+    const matchedSession = sessions.find(
+      s => s.qrCode === codeText || s.id === codeText || codeText.includes(s.pin || '____') || codeText.includes(s.courseCode || '')
+    ) || activeSession;
+
+    if (!matchedSession) {
+      setSheetConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Unrecognized QR Code',
+        message: `Scanned: "${codeText.substring(0, 40)}". This code does not match any current university laboratory session.`,
+        primaryActionText: 'Scan Again',
+        onPrimaryAction: () => {
+          setHasScannedCode(false);
+          setSheetConfig(prev => ({ ...prev, isOpen: false }));
+        },
+      });
+      return;
+    }
+
+    const currentRec = attendanceRecords.find(r => r.sessionId === matchedSession.id && r.studentId === currentUser.id);
+    const checkedIn = currentRec && (currentRec.status === 'present' || currentRec.status === 'late');
+
+    if (checkedIn && !currentRec.checkedOutAt && matchedSession.requiresCheckOut) {
+      // Check out
+      const result = checkOutStudent(matchedSession.id, currentUser.id, studentCoords || undefined);
+      setSheetConfig({
+        isOpen: true,
+        type: result.success ? 'success' : 'error',
+        title: result.success ? 'Checked Out Successfully' : 'Check-Out Notice',
+        message: result.message,
+        details: [
+          { label: 'Practical', value: matchedSession.title },
+          { label: 'Room', value: matchedSession.room },
+          { label: 'Exit Time', value: formatTime(new Date().toISOString()) },
+          ...(result.distanceMeters !== undefined ? [{ label: 'Proximity', value: `${formatDistance(result.distanceMeters)} from venue` }] : []),
+        ],
+        primaryActionText: 'Return to Home',
+        onPrimaryAction: () => navigate('/student'),
+      });
+    } else {
+      // Check in
+      const result = checkInStudent(matchedSession.id, currentUser.id, 'Camera QR Scan', studentCoords || undefined);
+      if (result.success) {
+        setSheetConfig({
+          isOpen: true,
+          type: result.code === 'success_late' ? 'warning' : 'success',
+          title: result.code === 'success_late' ? 'Recorded Late' : 'Check-In Confirmed',
+          message: result.message,
+          details: [
+            { label: 'Course', value: matchedSession.courseCode || 'LAB' },
+            { label: 'Session', value: matchedSession.title },
+            { label: 'Room', value: matchedSession.room },
+            { label: 'Status', value: result.code === 'success_late' ? 'Late (+15m)' : 'Present on Time' },
+            { label: 'Proximity', value: result.distanceMeters !== undefined ? `Verified in Lab (${formatDistance(result.distanceMeters)})` : 'Verified on Campus' },
+            { label: 'Timestamp', value: formatTime(result.record?.checkedInAt || new Date().toISOString()) },
+          ],
+          primaryActionText: 'View Dashboard',
+          onPrimaryAction: () => navigate('/student'),
+        });
+      } else {
+        const isGeoError = result.code === 'geofence_out_of_range' || result.code === 'geolocation_required';
+        setSheetConfig({
+          isOpen: true,
+          type: isGeoError ? 'error' : result.code === 'already_checked_in' ? 'info' : 'error',
+          title: result.code === 'geofence_out_of_range'
+            ? 'Location Verification Failed'
+            : result.code === 'geolocation_required'
+            ? 'GPS Location Required'
+            : result.code === 'already_checked_in'
+            ? 'Already Recorded'
+            : 'Check-In Notice',
+          message: result.message,
+          details: result.code === 'geofence_out_of_range' ? [
+            { label: 'Venue', value: result.venueName || matchedSession.room },
+            { label: 'Your Distance', value: formatDistance(result.distanceMeters || 0) },
+            { label: 'Allowed Range', value: `Within ${result.requiredRadius || 50}m` },
+            { label: 'Requirement', value: 'Physical presence in lab' },
+          ] : undefined,
+          primaryActionText: 'Scan Again',
+          onPrimaryAction: () => {
+            setHasScannedCode(false);
+            setSheetConfig(prev => ({ ...prev, isOpen: false }));
+          },
+        });
+      }
+    }
+  }, [hasScannedCode, sessions, activeSession, attendanceRecords, currentUser.id, studentCoords, checkInStudent, checkOutStudent, navigate]);
+
+  // Start Camera stream with resilient multi-level fallbacks
+  const startCamera = useCallback(async () => {
+    // Stop any existing stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setCameraReady(false);
+    setCameraErrorMsg('');
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraPermission('unavailable');
+      setCameraErrorMsg('Camera API is not supported in this browser or security context.');
+      return;
+    }
+
+    let stream: MediaStream | null = null;
+
+    // 1st Attempt: with preferred facingMode
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: facingMode },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+    } catch (err1: any) {
+      console.warn('Initial camera constraints failed, attempting fallback to generic video: true', err1);
+      // 2nd Attempt: fallback to any available video camera (crucial for desktops/laptops)
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      } catch (err2: any) {
+        console.error('All camera attempts failed:', err2);
+        if (err2.name === 'NotAllowedError' || err2.name === 'PermissionDeniedError') {
+          setCameraPermission('denied');
+          setCameraErrorMsg('Camera access was blocked. Please permit camera access in your browser address bar.');
+        } else if (err2.name === 'NotFoundError' || err2.name === 'DevicesNotFoundError') {
+          setCameraPermission('unavailable');
+          setCameraErrorMsg('No camera hardware was detected on this device.');
+        } else {
+          setCameraPermission('denied');
+          setCameraErrorMsg(`Camera error: ${err2.message || 'Unable to access hardware camera'}.`);
         }
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
-        }
-        setHasCameraPermission(true);
-      } catch (err) {
-        console.warn('Camera access unavailable or denied', err);
-        if (isMounted) setHasCameraPermission(false);
+        return;
       }
     }
 
-    initCamera();
+    if (stream) {
+      streamRef.current = stream;
+      setCameraPermission('granted');
 
-    return () => {
-      isMounted = false;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().then(() => {
+            setCameraReady(true);
+          }).catch(err => {
+            console.warn('Video play interrupted:', err);
+            setCameraReady(true);
+          });
+        };
+      }
+    }
+  }, [facingMode]);
+
+  // Request camera on mount or when switching facing mode
+  useEffect(() => {
+    if (activeTab === 'camera') {
+      startCamera();
+    } else {
+      // Pause camera stream when on PIN tab to save power
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+    }
+
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
       }
     };
-  }, []);
+  }, [activeTab, startCamera]);
+
+  // Continuous QR Code Scanning Loop
+  useEffect(() => {
+    if (!cameraReady || activeTab !== 'camera' || hasScannedCode) return;
+
+    if (!canvasRef.current) {
+      canvasRef.current = document.createElement('canvas');
+    }
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    let isScanning = true;
+
+    const tick = () => {
+      if (!isScanning) return;
+
+      const video = videoRef.current;
+      if (video && video.readyState === video.HAVE_ENOUGH_DATA && ctx) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        try {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const qr = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert',
+          });
+
+          if (qr && qr.data && qr.data.trim()) {
+            handleDetectedCode(qr.data.trim());
+            return;
+          }
+        } catch {
+          // Ignore frame decode glitch
+        }
+      }
+
+      animFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    animFrameRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      isScanning = false;
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
+    };
+  }, [cameraReady, activeTab, hasScannedCode, handleDetectedCode]);
 
   // Torch toggle
   const toggleTorch = async () => {
@@ -95,6 +372,11 @@ export const ScannerView: React.FC = () => {
     }
   };
 
+  // Flip Camera (environment vs user)
+  const toggleFacingMode = () => {
+    setFacingMode(prev => (prev === 'environment' ? 'user' : 'environment'));
+  };
+
   const handleSimulateScan = () => {
     if (!activeSession) {
       setSheetConfig({
@@ -108,9 +390,10 @@ export const ScannerView: React.FC = () => {
       return;
     }
 
+    playBeep();
+
     if (isCheckedIn && !studentRecord?.checkedOutAt && activeSession.requiresCheckOut) {
-      // Trigger check out
-      const result = checkOutStudent(activeSession.id, currentUser.id);
+      const result = checkOutStudent(activeSession.id, currentUser.id, studentCoords || undefined);
       setSheetConfig({
         isOpen: true,
         type: result.success ? 'success' : 'error',
@@ -120,13 +403,13 @@ export const ScannerView: React.FC = () => {
           { label: 'Practical', value: activeSession.title },
           { label: 'Room', value: activeSession.room },
           { label: 'Exit Time', value: formatTime(new Date().toISOString()) },
+          ...(result.distanceMeters !== undefined ? [{ label: 'Proximity', value: `${formatDistance(result.distanceMeters)} from venue` }] : []),
         ],
         primaryActionText: 'Return to Home',
         onPrimaryAction: () => navigate('/student'),
       });
     } else {
-      // Trigger check in
-      const result = checkInStudent(activeSession.id, currentUser.id, 'Simulated QR Scan');
+      const result = checkInStudent(activeSession.id, currentUser.id, 'Simulated QR Scan', studentCoords || undefined);
       if (result.success) {
         setSheetConfig({
           isOpen: true,
@@ -137,18 +420,32 @@ export const ScannerView: React.FC = () => {
             { label: 'Course', value: activeSession.courseCode || 'LAB' },
             { label: 'Session', value: activeSession.title },
             { label: 'Room', value: activeSession.room },
-            { label: 'Status', value: result.code === 'success_late' ? 'Late (+20m)' : 'Present on Time' },
+            { label: 'Status', value: result.code === 'success_late' ? 'Late (+15m)' : 'Present on Time' },
+            { label: 'Proximity', value: result.distanceMeters !== undefined ? `Verified in Lab (${formatDistance(result.distanceMeters)})` : 'Verified on Campus' },
             { label: 'Timestamp', value: formatTime(result.record?.checkedInAt || new Date().toISOString()) },
           ],
           primaryActionText: 'View Dashboard',
           onPrimaryAction: () => navigate('/student'),
         });
       } else {
+        const isGeoError = result.code === 'geofence_out_of_range' || result.code === 'geolocation_required';
         setSheetConfig({
           isOpen: true,
-          type: result.code === 'already_checked_in' ? 'info' : 'error',
-          title: result.code === 'already_checked_in' ? 'Already Recorded' : 'Check-In Notice',
+          type: isGeoError ? 'error' : result.code === 'already_checked_in' ? 'info' : 'error',
+          title: result.code === 'geofence_out_of_range'
+            ? 'Location Verification Failed'
+            : result.code === 'geolocation_required'
+            ? 'GPS Location Required'
+            : result.code === 'already_checked_in'
+            ? 'Already Recorded'
+            : 'Check-In Notice',
           message: result.message,
+          details: result.code === 'geofence_out_of_range' ? [
+            { label: 'Venue', value: result.venueName || activeSession.room },
+            { label: 'Your Distance', value: formatDistance(result.distanceMeters || 0) },
+            { label: 'Allowed Range', value: `Within ${result.requiredRadius || 50}m` },
+            { label: 'Requirement', value: 'Physical presence in lab' },
+          ] : undefined,
           primaryActionText: 'Understood',
           onPrimaryAction: () => setSheetConfig(prev => ({ ...prev, isOpen: false })),
         });
@@ -174,17 +471,18 @@ export const ScannerView: React.FC = () => {
       return;
     }
 
-    // Success via PIN
-    const result = checkInStudent(activeSession.id, currentUser.id, 'Session PIN');
+    playBeep();
+    const result = checkInStudent(activeSession.id, currentUser.id, 'Session PIN', studentCoords || undefined);
     if (result.success) {
       setSheetConfig({
         isOpen: true,
         type: 'success',
         title: 'PIN Verified — Check-In Recorded',
-        message: 'Your attendance was successfully verified via laboratory coordinator PIN.',
+        message: 'Your attendance and device proximity were successfully verified via laboratory coordinator PIN.',
         details: [
           { label: 'Practical', value: activeSession.title },
           { label: 'Method', value: `PIN Verification (#${pinInput.trim()})` },
+          { label: 'Proximity', value: result.distanceMeters !== undefined ? `Verified in Lab (${formatDistance(result.distanceMeters)})` : 'Verified on Campus' },
           { label: 'Time', value: formatTime(new Date().toISOString()) },
         ],
         primaryActionText: 'Return to Home',
@@ -200,7 +498,7 @@ export const ScannerView: React.FC = () => {
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'var(--color-scan-surface)',
+        backgroundColor: '#1E2024',
         color: '#FFFFFF',
         zIndex: 90,
         display: 'flex',
@@ -214,7 +512,7 @@ export const ScannerView: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '16px 20px',
-          zIndex: 10,
+          zIndex: 20,
         }}
       >
         <button
@@ -223,8 +521,8 @@ export const ScannerView: React.FC = () => {
             width: '42px',
             height: '42px',
             borderRadius: '50%',
-            backgroundColor: 'rgba(0, 0, 0, 0.45)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            border: '1px solid rgba(255, 255, 255, 0.25)',
             color: '#FFFFFF',
             display: 'flex',
             alignItems: 'center',
@@ -240,30 +538,51 @@ export const ScannerView: React.FC = () => {
           <h1 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#FFFFFF' }}>
             Scan QR Code
           </h1>
-          <span style={{ fontSize: '11px', color: '#E2E8F0', opacity: 0.85 }}>
-            {activeSession ? activeSession.courseCode || 'Laboratory' : 'Check In'}
+          <span style={{ fontSize: '11px', color: '#93C5FD', fontWeight: 600 }}>
+            {activeSession ? `${activeSession.courseCode} • ${activeSession.room}` : 'Check In'}
           </span>
         </div>
 
-        <button
-          onClick={toggleTorch}
-          style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: '50%',
-            backgroundColor: torchOn ? '#FFFFFF' : 'rgba(0, 0, 0, 0.45)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            color: torchOn ? 'var(--color-ink-900)' : '#FFFFFF',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-          }}
-          aria-label="Toggle flashlight"
-        >
-          <Flashlight size={18} />
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={toggleFacingMode}
+            title="Switch between front and back camera"
+            style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(0, 0, 0, 0.55)',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+            aria-label="Flip camera"
+          >
+            <SwitchCamera size={18} />
+          </button>
+
+          <button
+            onClick={toggleTorch}
+            style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '50%',
+              backgroundColor: torchOn ? '#FFFFFF' : 'rgba(0, 0, 0, 0.55)',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              color: torchOn ? 'var(--color-ink-900)' : '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+            aria-label="Toggle flashlight"
+          >
+            <Flashlight size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Mode Tabs: Camera Scan vs Enter PIN */}
@@ -272,16 +591,16 @@ export const ScannerView: React.FC = () => {
           display: 'flex',
           justifyContent: 'center',
           padding: '4px 16px',
-          zIndex: 10,
+          zIndex: 20,
         }}
       >
         <div
           style={{
             display: 'inline-flex',
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            padding: '3px',
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            padding: '4px',
             borderRadius: 'var(--radius-pill)',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
           }}
         >
           <button
@@ -301,7 +620,7 @@ export const ScannerView: React.FC = () => {
             }}
           >
             <Camera size={14} />
-            <span>QR Scanner</span>
+            <span>Live Camera</span>
           </button>
           <button
             onClick={() => setActiveTab('pin')}
@@ -325,6 +644,127 @@ export const ScannerView: React.FC = () => {
         </div>
       </div>
 
+      {/* Geolocation & Proximity Live Status Badge */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '8px 16px 4px 16px', zIndex: 20 }}>
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '5px 12px',
+            borderRadius: 'var(--radius-pill)',
+            fontSize: '11px',
+            fontWeight: 600,
+            backgroundColor:
+              geoStatus === 'verified'
+                ? 'rgba(16, 185, 129, 0.2)'
+                : geoStatus === 'out_of_range'
+                ? 'rgba(239, 68, 68, 0.25)'
+                : geoStatus === 'denied'
+                ? 'rgba(245, 158, 11, 0.25)'
+                : 'rgba(59, 130, 246, 0.2)',
+            color:
+              geoStatus === 'verified'
+                ? '#34D399'
+                : geoStatus === 'out_of_range'
+                ? '#FCA5A5'
+                : geoStatus === 'denied'
+                ? '#FCD34D'
+                : '#93C5FD',
+            border: `1px solid ${
+              geoStatus === 'verified'
+                ? 'rgba(52, 211, 153, 0.4)'
+                : geoStatus === 'out_of_range'
+                ? 'rgba(239, 68, 68, 0.4)'
+                : 'rgba(147, 197, 253, 0.3)'
+            }`,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          }}
+        >
+          {geoStatus === 'verified' ? (
+            <>
+              <CheckCircle2 size={13} />
+              <span>
+                GPS Verified: Inside Lab ({geoDistance !== null ? formatDistance(geoDistance) : '12m'} from {activeSession?.room?.split(',')[0] || 'Venue'})
+              </span>
+            </>
+          ) : geoStatus === 'out_of_range' ? (
+            <>
+              <AlertCircle size={13} />
+              <span>
+                GPS Out of Range: {geoDistance !== null ? formatDistance(geoDistance) : '450m'} away (Max: {activeSession?.geofence?.radiusMeters || 50}m)
+              </span>
+            </>
+          ) : geoStatus === 'denied' ? (
+            <>
+              <AlertCircle size={13} />
+              <span>{geoErrorMsg ? `GPS Notice: ${geoErrorMsg}` : 'GPS Access Denied • Using Proximity'}</span>
+            </>
+          ) : (
+            <>
+              <Locate size={13} />
+              <span>Acquiring Device GPS Signal...</span>
+            </>
+          )}
+        </div>
+
+        {/* Proximity Simulation / Mode Selector for Honest Testing */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span style={{ fontSize: '10px', color: '#94A3B8' }}>GPS Mode:</span>
+          <button
+            type="button"
+            onClick={() => setProximitySimMode('sim_inside')}
+            style={{
+              padding: '2px 8px',
+              fontSize: '10px',
+              fontWeight: 600,
+              borderRadius: 'var(--radius-pill)',
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: proximitySimMode === 'sim_inside' ? '#059669' : 'rgba(255,255,255,0.1)',
+              color: '#FFFFFF',
+            }}
+            title="Simulate student physically sitting inside the laboratory room (12m away)"
+          >
+            In Lab (12m)
+          </button>
+          <button
+            type="button"
+            onClick={() => setProximitySimMode('sim_outside')}
+            style={{
+              padding: '2px 8px',
+              fontSize: '10px',
+              fontWeight: 600,
+              borderRadius: 'var(--radius-pill)',
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: proximitySimMode === 'sim_outside' ? '#DC2626' : 'rgba(255,255,255,0.1)',
+              color: '#FFFFFF',
+            }}
+            title="Simulate student trying to check in from off-campus or dorm (450m away)"
+          >
+            Out of Range (450m)
+          </button>
+          <button
+            type="button"
+            onClick={() => setProximitySimMode('real')}
+            style={{
+              padding: '2px 8px',
+              fontSize: '10px',
+              fontWeight: 600,
+              borderRadius: 'var(--radius-pill)',
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: proximitySimMode === 'real' ? 'var(--color-brand-600)' : 'rgba(255,255,255,0.1)',
+              color: '#FFFFFF',
+            }}
+            title="Request actual hardware GPS coordinates from device"
+          >
+            Hardware GPS
+          </button>
+        </div>
+      </div>
+
       {/* Main View Area */}
       <div
         style={{
@@ -333,60 +773,123 @@ export const ScannerView: React.FC = () => {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '20px',
+          padding: '16px',
           position: 'relative',
           overflow: 'hidden',
         }}
       >
         {activeTab === 'camera' ? (
           <>
-            {/* Camera Video or Fallback Container */}
+            {/* Camera Video Container with ALWAYS MOUNTED <video> */}
             <div
               style={{
                 position: 'relative',
-                width: 'min(68vw, 280px)',
-                height: 'min(68vw, 280px)',
+                width: 'min(72vw, 300px)',
+                height: 'min(72vw, 300px)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto',
+                borderRadius: '16px',
+                overflow: 'hidden',
+                backgroundColor: '#000000',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
               }}
             >
-              {/* Actual Video Element */}
-              {hasCameraPermission ? (
-                <video
-                  ref={videoRef}
-                  playsInline
-                  muted
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    borderRadius: 'var(--radius-sm)',
-                  }}
-                />
-              ) : (
+              {/* Actual Video Element ALWAYS IN DOM */}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  transform: facingMode === 'user' ? 'scaleX(-1)' : 'none',
+                  opacity: cameraReady ? 1 : 0,
+                  transition: 'opacity 0.25s ease',
+                }}
+              />
+
+              {/* Loading / Camera Request Feedback overlay if not ready */}
+              {!cameraReady && (
                 <div
                   style={{
                     position: 'absolute',
                     inset: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-                    borderRadius: 'var(--radius-sm)',
+                    backgroundColor: '#1E2330',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '16px',
+                    padding: '20px',
                     textAlign: 'center',
-                    gap: '8px',
+                    gap: '10px',
                   }}
                 >
-                  <Camera size={32} color="#94A3B8" />
-                  <span style={{ fontSize: '11px', color: '#CBD5E1', lineHeight: '15px' }}>
-                    Camera preview ready. Use the demo scan trigger below to verify instantly.
-                  </span>
+                  {cameraPermission === 'prompt' && (
+                    <>
+                      <div
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          border: '3px solid rgba(255,255,255,0.2)',
+                          borderTopColor: 'var(--color-brand-500)',
+                          animation: 'spin 1s linear infinite',
+                        }}
+                      />
+                      <span style={{ fontSize: '12px', color: '#CBD5E1', fontWeight: 500 }}>
+                        Connecting to device camera...
+                      </span>
+                    </>
+                  )}
+
+                  {cameraPermission === 'denied' && (
+                    <>
+                      <AlertCircle size={32} color="#F87171" />
+                      <div style={{ fontSize: '12px', color: '#FCA5A5', fontWeight: 600 }}>
+                        Camera Permission Blocked
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#CBD5E1', lineHeight: '15px' }}>
+                        {cameraErrorMsg || 'Please allow camera access in your browser settings to scan live codes.'}
+                      </div>
+                      <button
+                        onClick={startCamera}
+                        style={{
+                          marginTop: '6px',
+                          padding: '6px 12px',
+                          borderRadius: 'var(--radius-pill)',
+                          border: '1px solid rgba(255,255,255,0.3)',
+                          backgroundColor: 'rgba(255,255,255,0.15)',
+                          color: '#FFFFFF',
+                          fontSize: '11px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <RefreshCw size={11} />
+                        <span>Try Again</span>
+                      </button>
+                    </>
+                  )}
+
+                  {cameraPermission === 'unavailable' && (
+                    <>
+                      <Camera size={32} color="#94A3B8" />
+                      <div style={{ fontSize: '12px', color: '#E2E8F0', fontWeight: 600 }}>
+                        No Camera Detected
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#94A3B8', lineHeight: '15px' }}>
+                        Use the "Enter PIN" tab or the "Simulate Scan" action below.
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -396,23 +899,24 @@ export const ScannerView: React.FC = () => {
                   position: 'absolute',
                   inset: 0,
                   pointerEvents: 'none',
+                  zIndex: 10,
                 }}
               >
                 {/* Top Left */}
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '28px', height: '28px', borderTop: '4px solid #FFFFFF', borderLeft: '4px solid #FFFFFF', borderTopLeftRadius: '8px' }} />
+                <div style={{ position: 'absolute', top: '10px', left: '10px', width: '28px', height: '28px', borderTop: '4px solid #FFFFFF', borderLeft: '4px solid #FFFFFF', borderTopLeftRadius: '8px' }} />
                 {/* Top Right */}
-                <div style={{ position: 'absolute', top: 0, right: 0, width: '28px', height: '28px', borderTop: '4px solid #FFFFFF', borderRight: '4px solid #FFFFFF', borderTopRightRadius: '8px' }} />
+                <div style={{ position: 'absolute', top: '10px', right: '10px', width: '28px', height: '28px', borderTop: '4px solid #FFFFFF', borderRight: '4px solid #FFFFFF', borderTopRightRadius: '8px' }} />
                 {/* Bottom Left */}
-                <div style={{ position: 'absolute', bottom: 0, left: 0, width: '28px', height: '28px', borderBottom: '4px solid #FFFFFF', borderLeft: '4px solid #FFFFFF', borderBottomLeftRadius: '8px' }} />
+                <div style={{ position: 'absolute', bottom: '10px', left: '10px', width: '28px', height: '28px', borderBottom: '4px solid #FFFFFF', borderLeft: '4px solid #FFFFFF', borderBottomLeftRadius: '8px' }} />
                 {/* Bottom Right */}
-                <div style={{ position: 'absolute', bottom: 0, right: 0, width: '28px', height: '28px', borderBottom: '4px solid #FFFFFF', borderRight: '4px solid #FFFFFF', borderBottomRightRadius: '8px' }} />
+                <div style={{ position: 'absolute', bottom: '10px', right: '10px', width: '28px', height: '28px', borderBottom: '4px solid #FFFFFF', borderRight: '4px solid #FFFFFF', borderBottomRightRadius: '8px' }} />
 
                 {/* Animated Laser Scan Line */}
                 <div
                   style={{
                     position: 'absolute',
-                    left: '8px',
-                    right: '8px',
+                    left: '16px',
+                    right: '16px',
                     height: '2px',
                     backgroundColor: '#60A5FA',
                     boxShadow: '0 0 10px #60A5FA, 0 0 20px #60A5FA',
@@ -426,9 +930,9 @@ export const ScannerView: React.FC = () => {
             {/* Instruction text with 24px spacing */}
             <div
               style={{
-                marginTop: '28px',
+                marginTop: '22px',
                 textAlign: 'center',
-                maxWidth: '280px',
+                maxWidth: '300px',
               }}
             >
               <p
@@ -440,7 +944,7 @@ export const ScannerView: React.FC = () => {
                   margin: 0,
                 }}
               >
-                Align the laboratory session QR code within the frame to check in.
+                Point camera at the lab session QR code. Detection is automatic!
               </p>
               {activeSession && (
                 <div
@@ -451,12 +955,12 @@ export const ScannerView: React.FC = () => {
                     marginTop: '8px',
                     fontSize: '11px',
                     color: '#93C5FD',
-                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                    padding: '3px 10px',
+                    backgroundColor: 'rgba(59, 130, 246, 0.25)',
+                    padding: '3px 12px',
                     borderRadius: 'var(--radius-pill)',
                   }}
                 >
-                  <span>Active Session: <strong>{activeSession.title.substring(0, 26)}...</strong></span>
+                  <span>Active Session: <strong>{activeSession.title.substring(0, 24)}...</strong></span>
                 </div>
               )}
             </div>
@@ -468,9 +972,9 @@ export const ScannerView: React.FC = () => {
             style={{
               width: '100%',
               maxWidth: '320px',
-              backgroundColor: 'rgba(0, 0, 0, 0.55)',
+              backgroundColor: 'rgba(0, 0, 0, 0.65)',
               borderRadius: 'var(--radius-md)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
               padding: '24px 20px',
               textAlign: 'center',
             }}
@@ -559,13 +1063,13 @@ export const ScannerView: React.FC = () => {
       {/* Bottom Sticky Action Area with Simulate Scan Button */}
       <div
         style={{
-          padding: '16px 20px calc(16px + env(safe-area-inset-bottom, 0px)) 20px',
-          backgroundColor: 'rgba(0, 0, 0, 0.45)',
-          backdropFilter: 'blur(8px)',
+          padding: '14px 20px calc(14px + env(safe-area-inset-bottom, 0px)) 20px',
+          backgroundColor: 'rgba(0, 0, 0, 0.65)',
+          backdropFilter: 'blur(10px)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '10px',
-          zIndex: 10,
+          gap: '8px',
+          zIndex: 20,
         }}
       >
         <button
@@ -585,8 +1089,8 @@ export const ScannerView: React.FC = () => {
           <span>Simulate Scan ({isCheckedIn ? 'Check Out' : 'Check In'})</span>
         </button>
 
-        <div style={{ textAlign: 'center', fontSize: '11px', color: '#CBD5E1' }}>
-          Simulates authentic student camera QR decode for prototype testing.
+        <div style={{ textAlign: 'center', fontSize: '11px', color: '#94A3B8' }}>
+          Simulates live QR scan if no physical code or camera is within reach.
         </div>
       </div>
 

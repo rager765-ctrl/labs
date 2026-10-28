@@ -16,6 +16,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { formatTime, formatDate, calculateSessionMetrics } from '../../services/storage';
+import { formatDistance } from '../../services/geoService';
 
 export const CoordinatorSessionLive: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -166,6 +167,24 @@ export const CoordinatorSessionLive: React.FC = () => {
               <Shield size={14} color="var(--color-ink-500)" />
               Checkout Required: <strong>{session.requiresCheckOut ? 'Yes' : 'No'}</strong>
             </span>
+            {session.geofence && session.geofence.enabled && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  backgroundColor: 'var(--color-success-100)',
+                  color: 'var(--color-success-700)',
+                  padding: '2px 8px',
+                  borderRadius: 'var(--radius-pill)',
+                  fontWeight: 600,
+                  fontSize: '11px',
+                }}
+              >
+                <MapPin size={12} />
+                <span>Geofence: {session.geofence.radiusMeters}m Radius {session.geofence.strictEnforcement ? '(Strict)' : '(Audit)'}</span>
+              </span>
+            )}
           </div>
         </div>
 
@@ -449,7 +468,28 @@ export const CoordinatorSessionLive: React.FC = () => {
                         </div>
                       </div>
 
-                      <StatusBadge status={rec.status} size="sm" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {rec.location && (
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              color: rec.location.isWithinGeofence ? 'var(--color-success-700)' : 'var(--color-danger-700)',
+                              backgroundColor: rec.location.isWithinGeofence ? 'var(--color-success-100)' : '#FDECEE',
+                              padding: '2px 6px',
+                              borderRadius: 'var(--radius-pill)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                            }}
+                            title={`GPS Coordinates: ${rec.location.latitude.toFixed(5)}, ${rec.location.longitude.toFixed(5)} (±${rec.location.accuracy}m)`}
+                          >
+                            <MapPin size={10} />
+                            <span>{formatDistance(rec.location.distanceMeters)}</span>
+                          </span>
+                        )}
+                        <StatusBadge status={rec.status} size="sm" />
+                      </div>
                     </div>
                   );
                 })

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { CoordinatorNav } from '../../components/coordinator/CoordinatorNav';
-import { AlertCircle, ArrowLeft } from 'lucide-react';
+import { AlertCircle, ArrowLeft, MapPin, Locate } from 'lucide-react';
+import { getDeviceCurrentPosition } from '../../services/geoService';
 
 export const CreateSessionForm: React.FC = () => {
   const navigate = useNavigate();
@@ -11,7 +12,7 @@ export const CreateSessionForm: React.FC = () => {
   const [title, setTitle] = useState('');
   const [courseCode, setCourseCode] = useState('CS302');
   const [labName, setLabName] = useState('Software Engineering Lab');
-  const [room, setRoom] = useState('Room 304B, Turing Hall');
+  const [room, setRoom] = useState('');
   const [date, setDate] = useState(() => {
     const d = new Date();
     return d.toISOString().split('T')[0];
@@ -25,11 +26,67 @@ export const CreateSessionForm: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Geofence & Proximity Configuration
+  const [geofenceEnabled, setGeofenceEnabled] = useState(true);
+  const [latitude, setLatitude] = useState<number>(0);
+  const [longitude, setLongitude] = useState<number>(0);
+  const [radiusMeters, setRadiusMeters] = useState<number>(50);
+  const [strictEnforcement, setStrictEnforcement] = useState<boolean>(true);
+  const [locationName, setLocationName] = useState('Use your device location or enter coordinates');
+  const [resolvingLocation, setResolvingLocation] = useState(false);
+  const [requestingDeviceLocation, setRequestingDeviceLocation] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const [deviceAccuracy, setDeviceAccuracy] = useState<number | null>(null);
+  const [standaloneMap, setStandaloneMap] = useState(false);
+
+  useEffect(() => {
+    if (latitude === 0 && longitude === 0) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setResolvingLocation(true);
+      try {
+        const query = new URLSearchParams({ format: 'jsonv2', lat: String(latitude), lon: String(longitude) });
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${query}`, { signal: controller.signal });
+        if (!response.ok) throw new Error('Location lookup failed');
+        const result = await response.json();
+        setLocationName(result.name || result.address?.amenity || result.address?.building || result.address?.road || result.display_name || 'Selected map location');
+      } catch {
+        if (!controller.signal.aborted) setLocationName('Selected map location');
+      } finally {
+        if (!controller.signal.aborted) setResolvingLocation(false);
+      }
+    }, 500);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [latitude, longitude]);
+
   // Check for potential room conflict
   const hasRoomConflict = sessions.some(s => {
     const sDate = s.startsAt.split('T')[0];
     return sDate === date && s.room.toLowerCase() === room.toLowerCase() && s.status !== 'completed' && s.status !== 'cancelled';
   });
+
+  const handleRequestDeviceLocation = async () => {
+    setRequestingDeviceLocation(true);
+    setLocationError('');
+    try {
+      const position = await getDeviceCurrentPosition();
+      setLatitude(position.latitude);
+      setLongitude(position.longitude);
+      setDeviceAccuracy(position.accuracy);
+    } catch (error) {
+      setLocationError(error instanceof Error ? error.message : 'Could not get device location.');
+    } finally {
+      setRequestingDeviceLocation(false);
+    }
+  };
+
+  const openStandaloneMap = (open: boolean) => {
+    setStandaloneMap(open);
+    if (open && (latitude !== 0 || longitude !== 0)) {
+      const mapUrl = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=18/${latitude}/${longitude}`;
+      window.open(mapUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +114,17 @@ export const CreateSessionForm: React.FC = () => {
     const checkInOpenDate = new Date(new Date(startsAt).getTime() - checkInOffsetMinutes * 60000);
     const checkInOpensAt = checkInOpenDate.toISOString();
 
+    const geofence = geofenceEnabled
+      ? {
+          enabled: true,
+          latitude: Number(latitude),
+          longitude: Number(longitude),
+          radiusMeters: Number(radiusMeters),
+          venueName: locationName,
+          strictEnforcement,
+        }
+      : undefined;
+
     const created = createSession({
       title: title.trim(),
       courseCode: courseCode.trim().toUpperCase(),
@@ -70,6 +138,7 @@ export const CreateSessionForm: React.FC = () => {
       requiresCheckOut,
       description: description.trim(),
       notes: notes.trim(),
+      geofence,
     });
 
     navigate(`/coordinator/sessions/${created.id}`);
@@ -227,6 +296,202 @@ export const CreateSessionForm: React.FC = () => {
               />
               {errors.room && <span style={{ fontSize: '11px', color: 'var(--color-danger-700)' }}>{errors.room}</span>}
             </div>
+          </div>
+
+          {/* Geolocation & Physical Proximity Criteria Card */}
+          <div
+            style={{
+              padding: '16px',
+              backgroundColor: geofenceEnabled ? 'var(--color-brand-50)' : '#F8FAFC',
+              border: '1px solid var(--color-brand-100)',
+              borderRadius: 'var(--radius-md)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: 'var(--radius-sm)',
+                    backgroundColor: 'var(--color-brand-600)',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MapPin size={17} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-ink-900)' }}>
+                    Geolocation & Physical Proximity
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>
+                    Verify students are physically present in the laboratory using GPS hardware
+                  </div>
+                </div>
+              </div>
+
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-ink-700)' }}>
+                  {geofenceEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={geofenceEnabled}
+                  onChange={(e) => setGeofenceEnabled(e.target.checked)}
+                  style={{ width: '18px', height: '18px', accentColor: 'var(--color-brand-700)' }}
+                />
+              </label>
+            </div>
+
+            {geofenceEnabled && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '4px' }}>
+                {/* Choose the geofence anchor from this device or coordinates */}
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+                    Lab Geofence Anchor Point
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleRequestDeviceLocation}
+                    disabled={requestingDeviceLocation}
+                    className="btn-secondary"
+                    style={{ height: '40px', padding: '0 14px', fontSize: '12px', fontWeight: 600, gap: '7px', backgroundColor: '#FFFFFF' }}
+                  >
+                    <Locate size={15} />
+                    <span>{requestingDeviceLocation ? 'Requesting location access…' : 'Use my device location'}</span>
+                  </button>
+                  {locationError && <div role="alert" style={{ marginTop: '7px', color: 'var(--color-danger-700)', fontSize: '12px' }}>{locationError}</div>}
+
+                </div>
+
+                <div style={{ border: '1px solid var(--color-line)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', background: '#fff' }}>
+                  {latitude !== 0 || longitude !== 0 ? (
+                    <iframe
+                      title="OpenStreetMap geofence location"
+                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${longitude - 0.008}%2C${latitude - 0.005}%2C${longitude + 0.008}%2C${latitude + 0.005}&layer=mapnik&marker=${latitude}%2C${longitude}`}
+                      style={{ width: '100%', height: '280px', border: 0, display: 'block' }}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div style={{ height: '120px', display: 'grid', placeItems: 'center', color: 'var(--color-ink-500)', fontSize: '12px' }}>
+                      Request your device location or enter coordinates to preview the map.
+                    </div>
+                  )}
+                  <div style={{ padding: '9px 12px', fontSize: '12px', color: 'var(--color-ink-700)', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <MapPin size={14} color="var(--color-brand-700)" />
+                    <span style={{ flex: 1 }}>
+                      <strong>{resolvingLocation ? 'Resolving place name...' : locationName}</strong>
+                      {deviceAccuracy !== null && <span> · GPS accuracy ±{deviceAccuracy} m</span>}
+                      {' '}| OpenStreetMap
+                    </span>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      <input type="checkbox" checked={standaloneMap} disabled={latitude === 0 && longitude === 0} onChange={(e) => openStandaloneMap(e.target.checked)} />
+                      <span>Open standalone</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Coordinate Inputs */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-600)', display: 'block', marginBottom: '3px' }}>
+                      Latitude
+                    </label>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      value={latitude}
+                      onChange={(e) => {
+                        setLatitude(Number(e.target.value));
+                        setDeviceAccuracy(null);
+                      }}
+                      style={{
+                        width: '100%',
+                        height: '38px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--color-line)',
+                        padding: '0 8px',
+                        fontSize: '12px',
+                        backgroundColor: '#FFFFFF',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-600)', display: 'block', marginBottom: '3px' }}>
+                      Longitude
+                    </label>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      value={longitude}
+                      onChange={(e) => {
+                        setLongitude(Number(e.target.value));
+                        setDeviceAccuracy(null);
+                      }}
+                      style={{
+                        width: '100%',
+                        height: '38px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--color-line)',
+                        padding: '0 8px',
+                        fontSize: '12px',
+                        backgroundColor: '#FFFFFF',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-600)', display: 'block', marginBottom: '3px' }}>
+                      Allowed Radius
+                    </label>
+                    <input
+                      type="number"
+                      min={5}
+                      max={5000}
+                      step={5}
+                      value={radiusMeters}
+                      onChange={(e) => setRadiusMeters(Math.min(5000, Math.max(5, Number(e.target.value))))}
+                      style={{
+                        width: '100%',
+                        height: '38px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--color-line)',
+                        padding: '0 8px',
+                        fontSize: '12px',
+                        backgroundColor: '#FFFFFF',
+                      }}
+                    />
+                    <span style={{ fontSize: '10px', color: 'var(--color-ink-500)' }}>Enter radius in metres (5–5,000)</span>
+                  </div>
+                </div>
+
+                {/* Strict Enforcement Toggle */}
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer', marginTop: '2px' }}>
+                  <input
+                    type="checkbox"
+                    checked={strictEnforcement}
+                    onChange={(e) => setStrictEnforcement(e.target.checked)}
+                    style={{ width: '16px', height: '16px', marginTop: '2px', accentColor: 'var(--color-brand-700)' }}
+                  />
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-ink-900)' }}>
+                      Strict Geofence Enforcement (Recommended)
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>
+                      Rejects check-in attempts if the student's device is beyond {radiusMeters}m from the venue.
+                    </div>
+                  </div>
+                </label>
+              </div>
+            )}
           </div>
 
           {/* Schedule: Date, Start Time, End Time */}

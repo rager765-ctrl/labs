@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import type { User as FirebaseUser } from 'firebase/auth';
 import type {
   User,
   LabSession,
@@ -16,23 +17,72 @@ import {
 } from '../services/storage';
 import type { AppState } from '../services/storage';
 import { CURRENT_STUDENT, CURRENT_COORDINATOR } from '../services/mockData';
+import { initAnalytics } from '../services/firebase';
+import {
+  listenToAuthChanges,
+  signInUser,
+  signUpUser,
+  signOutUser,
+  signUpCoordinatorWithInvite,
+} from '../services/authService';
+import {
+  subscribeToSessions,
+  subscribeToAttendance,
+  subscribeToCorrections,
+  saveAttendanceToFirestore,
+  saveSessionToFirestore,
+  updateSessionStatusInFirestore,
+  saveCorrectionToFirestore,
+  updateCorrectionInFirestore,
+  seedFirestoreIfEmpty,
+  createCoordinatorInvite,
+} from '../services/firestoreService';
+import type { CoordinatorInvite } from '../services/firestoreService';
+import {
+  evaluateGeofenceProximity,
+  calculateHaversineDistanceMeters,
+  formatDistance,
+} from '../services/geoService';
+import type { AttendanceLocation } from '../types';
 
-interface CheckInResult {
-  success: boolean;
-  code: 'success_present' | 'success_late' | 'already_checked_in' | 'not_open' | 'invalid_session' | 'camera_error';
-  message: string;
-  record?: AttendanceRecord;
+export interface CheckInCoords {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
 }
 
-interface CheckOutResult {
+export interface CheckInResult {
+  success: boolean;
+  code:
+    | 'success_present'
+    | 'success_late'
+    | 'already_checked_in'
+    | 'not_open'
+    | 'invalid_session'
+    | 'camera_error'
+    | 'geofence_out_of_range'
+    | 'geolocation_required';
+  message: string;
+  record?: AttendanceRecord;
+  distanceMeters?: number;
+  requiredRadius?: number;
+  venueName?: string;
+  isWithinGeofence?: boolean;
+}
+
+export interface CheckOutResult {
   success: boolean;
   message: string;
   record?: AttendanceRecord;
+  distanceMeters?: number;
+  isWithinGeofence?: boolean;
 }
 
 interface AppContextValue {
   currentRole: UserRole;
   currentUser: User;
+  firebaseUser: FirebaseUser | null;
+  isCloudConnected: boolean;
   students: User[];
   sessions: LabSession[];
   attendanceRecords: AttendanceRecord[];
@@ -42,14 +92,20 @@ interface AppContextValue {
   resetDemoData: () => void;
   addToast: (message: string, type?: 'success' | 'error' | 'info', title?: string) => void;
   removeToast: (id: string) => void;
-  checkInStudent: (sessionId: string, studentId: string, method?: string) => CheckInResult;
-  checkOutStudent: (sessionId: string, studentId: string) => CheckOutResult;
+  checkInStudent: (sessionId: string, studentId: string, method?: string, coords?: CheckInCoords) => CheckInResult;
+  checkOutStudent: (sessionId: string, studentId: string, coords?: CheckInCoords) => CheckOutResult;
   createSession: (session: Omit<LabSession, 'id' | 'status' | 'coordinatorId'>) => LabSession;
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
   markAttendanceManual: (sessionId: string, studentId: string, status: AttendanceStatus, reason: string) => void;
   submitCorrectionRequest: (recordId: string, requestedStatus: AttendanceStatus, reason: string) => void;
   updateCorrectionStatus: (correctionId: string, status: 'approved' | 'rejected') => void;
   simulateRandomArrival: (sessionId: string) => User | null;
+  loginWithEmail: (email: string, pass: string) => Promise<User>;
+  registerWithEmail: (email: string, pass: string, name: string, role?: UserRole, studentId?: string) => Promise<User>;
+  createCoordinatorInvite: () => Promise<CoordinatorInvite>;
+  registerCoordinatorWithInvite: (token: string, email: string, pass: string, name: string) => Promise<User>;
+  logoutFirebase: () => Promise<void>;
+  syncToCloud: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -57,8 +113,10 @@ const AppContext = createContext<AppContextValue | null>(null);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AppState>(() => loadStoredState());
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
 
-  // Keep state synced with localStorage
+  // Keep state synced with localStorage as offline/fast cache
   useEffect(() => {
     saveStoredState(state);
   }, [state]);
@@ -77,6 +135,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  // Initialize Firebase Analytics, Auth Listener & Realtime Firestore listeners
+  useEffect(() => {
+    initAnalytics();
+
+    // Listen to Firebase Auth state
+    const unsubscribeAuth = listenToAuthChanges((profile: User | null, fbUser: FirebaseUser | null) => {
+      setFirebaseUser(fbUser);
+      if (profile) {
+        setState(prev => ({
+          ...prev,
+          currentUser: profile,
+          currentRole: profile.role,
+        }));
+      }
+    });
+
+    // Seed Firestore if empty
+    seedFirestoreIfEmpty().then((seeded: boolean) => {
+      if (seeded) {
+        console.log('Seeded initial sessions and attendance to Firestore BaaS');
+      }
+      setIsCloudConnected(true);
+    }).catch((err: unknown) => {
+      console.warn('Firestore seeding check failed:', err);
+    });
+
+    // Realtime Firestore listeners
+    const unsubSessions = subscribeToSessions((cloudSessions: LabSession[]) => {
+      if (cloudSessions.length > 0) {
+        setState(prev => ({ ...prev, sessions: cloudSessions }));
+        setIsCloudConnected(true);
+      }
+    });
+
+    const unsubAttendance = subscribeToAttendance((cloudAttendance: AttendanceRecord[]) => {
+      if (cloudAttendance.length > 0) {
+        setState(prev => ({ ...prev, attendanceRecords: cloudAttendance }));
+        setIsCloudConnected(true);
+      }
+    });
+
+    const unsubCorrections = subscribeToCorrections((cloudCorrections: CorrectionRequest[]) => {
+      if (cloudCorrections.length > 0) {
+        setState(prev => ({ ...prev, corrections: cloudCorrections }));
+        setIsCloudConnected(true);
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      unsubSessions();
+      unsubAttendance();
+      unsubCorrections();
+    };
+  }, []);
+
   const switchRole = useCallback((role: UserRole) => {
     setState(prev => ({
       ...prev,
@@ -92,7 +206,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Demo database restored to default clean state', 'success', 'Reset Complete');
   }, [addToast]);
 
-  const checkInStudent = useCallback((sessionId: string, studentId: string, method = 'QR Code'): CheckInResult => {
+  const checkInStudent = useCallback((
+    sessionId: string,
+    studentId: string,
+    method = 'QR Code',
+    coords?: CheckInCoords
+  ): CheckInResult => {
     const session = state.sessions.find(s => s.id === sessionId);
     if (!session) {
       return { success: false, code: 'invalid_session', message: 'Session not found or invalid session code.' };
@@ -106,6 +225,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? `Check-in is not open yet. Starts at ${new Date(session.checkInOpensAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
           : 'This practical session is completed and check-in is closed.',
       };
+    }
+
+    // Geofence & Proximity Verification
+    let attendanceLocation: AttendanceLocation | undefined = undefined;
+    if (session.geofence && session.geofence.enabled) {
+      if (!coords) {
+        return {
+          success: false,
+          code: 'geolocation_required',
+          message: `Device GPS location is required to verify physical presence in ${session.geofence.venueName || session.room}. Please enable device location access.`,
+        };
+      }
+
+      const evaluation = evaluateGeofenceProximity(
+        coords.latitude,
+        coords.longitude,
+        coords.accuracy || 10,
+        session.geofence
+      );
+
+      attendanceLocation = {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy || 10,
+        distanceMeters: evaluation.distanceMeters,
+        isWithinGeofence: evaluation.isWithin,
+        timestamp: new Date().toISOString(),
+      };
+
+      if (!evaluation.isWithin && session.geofence.strictEnforcement) {
+        return {
+          success: false,
+          code: 'geofence_out_of_range',
+          message: `Location out of range: You are ${formatDistance(evaluation.distanceMeters)} away from ${session.geofence.venueName || session.room}. Must be within ${session.geofence.radiusMeters}m to check in.`,
+          distanceMeters: evaluation.distanceMeters,
+          requiredRadius: session.geofence.radiusMeters,
+          venueName: session.geofence.venueName || session.room,
+          isWithinGeofence: false,
+        };
+      }
     }
 
     // Check if already checked in
@@ -126,6 +285,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const isLate = diffMinutes > session.lateAfterMinutes;
     const finalStatus: AttendanceStatus = isLate ? 'late' : 'present';
 
+    const geoAudit = attendanceLocation
+      ? ` [GPS: ${formatDistance(attendanceLocation.distanceMeters)} from venue, ±${attendanceLocation.accuracy}m accuracy, ${attendanceLocation.isWithinGeofence ? 'Verified Inside' : 'Flagged Outside'}]`
+      : '';
+
     const newRecord: AttendanceRecord = {
       id: existing ? existing.id : `rec-${Date.now()}-${studentId}`,
       sessionId,
@@ -134,16 +297,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       checkedInAt: now.toISOString(),
       updatedBy: `student-${method.toLowerCase()}`,
       note: isLate ? `Checked in ${diffMinutes} minutes after start threshold` : undefined,
+      location: attendanceLocation,
       audit: [
         ...(existing?.audit || []),
         {
           at: now.toISOString(),
           actorId: studentId,
-          action: `Checked in via ${method} (${finalStatus.toUpperCase()})`,
+          action: `Checked in via ${method} (${finalStatus.toUpperCase()})${geoAudit}`,
         },
       ],
     };
 
+    // Optimistic local state update
     setState(prev => {
       const filtered = prev.attendanceRecords.filter(r => !(r.sessionId === sessionId && r.studentId === studentId));
       return {
@@ -152,8 +317,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     });
 
+    // Asynchronously push to Firebase Firestore
+    saveAttendanceToFirestore(newRecord).catch((err: unknown) => {
+      console.warn('Could not sync attendance to Firestore:', err);
+    });
+
+    const distInfo = attendanceLocation ? ` (📍 ${formatDistance(attendanceLocation.distanceMeters)})` : '';
     addToast(
-      isLate ? `Checked in as Late (${session.title})` : `Successfully checked in to ${session.courseCode || session.title}!`,
+      isLate ? `Checked in as Late (${session.title})${distInfo}` : `Successfully checked in to ${session.courseCode || session.title}!${distInfo}`,
       isLate ? 'info' : 'success',
       isLate ? 'Late Check-in' : 'Attendance Confirmed'
     );
@@ -163,12 +334,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       code: isLate ? 'success_late' : 'success_present',
       message: isLate
         ? `You were checked in late (${diffMinutes} min past threshold).`
-        : 'Your presence has been recorded and verified for today’s practical session.',
+        : 'Your presence and location have been recorded and verified for today’s practical session.',
       record: newRecord,
+      distanceMeters: attendanceLocation?.distanceMeters,
+      isWithinGeofence: attendanceLocation?.isWithinGeofence,
     };
   }, [state.sessions, state.attendanceRecords, addToast]);
 
-  const checkOutStudent = useCallback((sessionId: string, studentId: string): CheckOutResult => {
+  const checkOutStudent = useCallback((
+    sessionId: string,
+    studentId: string,
+    coords?: CheckInCoords
+  ): CheckOutResult => {
     const existing = state.attendanceRecords.find(r => r.sessionId === sessionId && r.studentId === studentId);
     if (!existing || !existing.checkedInAt) {
       return { success: false, message: 'You must check in before checking out.' };
@@ -178,29 +355,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: `Already checked out at ${new Date(existing.checkedOutAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` };
     }
 
+    const session = state.sessions.find(s => s.id === sessionId);
     const now = new Date().toISOString();
+
+    let checkoutLocation: AttendanceLocation | undefined = undefined;
+    if (coords) {
+      const distance = session?.geofence
+        ? calculateHaversineDistanceMeters(coords.latitude, coords.longitude, session.geofence.latitude, session.geofence.longitude)
+        : 0;
+      const isWithin = session?.geofence ? distance <= session.geofence.radiusMeters : true;
+      checkoutLocation = {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy || 10,
+        distanceMeters: distance,
+        isWithinGeofence: isWithin,
+        timestamp: now,
+      };
+    }
+
     const updatedRecord: AttendanceRecord = {
       ...existing,
       checkedOutAt: now,
+      checkoutLocation,
       audit: [
         ...existing.audit,
-        { at: now, actorId: studentId, action: 'Student checked out successfully' },
+        {
+          at: now,
+          actorId: studentId,
+          action: checkoutLocation
+            ? `Student checked out [GPS: ${formatDistance(checkoutLocation.distanceMeters)} from venue]`
+            : 'Student checked out successfully',
+        },
       ],
     };
 
+    // Optimistic local state update
     setState(prev => ({
       ...prev,
       attendanceRecords: prev.attendanceRecords.map(r => r.id === existing.id ? updatedRecord : r),
     }));
 
+    // Asynchronously update in Firestore
+    saveAttendanceToFirestore(updatedRecord).catch((err: unknown) => {
+      console.warn('Could not sync checkout to Firestore:', err);
+    });
+
     addToast('Lab practical check-out confirmed. Good work today!', 'success', 'Checked Out');
 
     return {
       success: true,
-      message: 'Check-out completed successfully. Your exit timestamp has been recorded.',
+      message: 'Check-out completed successfully. Your exit timestamp and location have been recorded.',
       record: updatedRecord,
+      distanceMeters: checkoutLocation?.distanceMeters,
+      isWithinGeofence: checkoutLocation?.isWithinGeofence,
     };
-  }, [state.attendanceRecords, addToast]);
+  }, [state.sessions, state.attendanceRecords, addToast]);
 
   const createSession = useCallback((data: Omit<LabSession, 'id' | 'status' | 'coordinatorId'>): LabSession => {
     const id = `session-${Date.now()}`;
@@ -218,6 +428,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       sessions: [newSession, ...prev.sessions],
     }));
 
+    // Asynchronously push to Firestore
+    saveSessionToFirestore(newSession).catch((err: unknown) => {
+      console.warn('Could not sync created session to Firestore:', err);
+    });
+
     addToast(`Session "${newSession.title}" scheduled successfully`, 'success', 'Session Created');
     return newSession;
   }, [state.currentUser.id, addToast]);
@@ -227,6 +442,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
       sessions: prev.sessions.map(s => s.id === sessionId ? { ...s, status } : s),
     }));
+
+    // Update in Firestore
+    updateSessionStatusInFirestore(sessionId, status).catch((err: unknown) => {
+      console.warn('Could not sync session status to Firestore:', err);
+    });
+
     addToast(`Session status updated to ${status.toUpperCase()}`, 'info');
   }, [addToast]);
 
@@ -237,12 +458,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     reason: string
   ) => {
     const now = new Date().toISOString();
+    let recordToSave: AttendanceRecord;
+
     setState(prev => {
       const existing = prev.attendanceRecords.find(r => r.sessionId === sessionId && r.studentId === studentId);
       let updatedRecords: AttendanceRecord[];
 
       if (existing) {
-        const updated: AttendanceRecord = {
+        recordToSave = {
           ...existing,
           status,
           updatedBy: prev.currentUser.id,
@@ -258,9 +481,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             },
           ],
         };
-        updatedRecords = prev.attendanceRecords.map(r => r.id === existing.id ? updated : r);
+        updatedRecords = prev.attendanceRecords.map(r => r.id === existing.id ? recordToSave : r);
       } else {
-        const fresh: AttendanceRecord = {
+        recordToSave = {
           id: `rec-${Date.now()}-${studentId}`,
           sessionId,
           studentId,
@@ -277,8 +500,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             },
           ],
         };
-        updatedRecords = [fresh, ...prev.attendanceRecords];
+        updatedRecords = [recordToSave, ...prev.attendanceRecords];
       }
+
+      // Save to Firestore
+      saveAttendanceToFirestore(recordToSave).catch((err: unknown) => {
+        console.warn('Could not sync manual attendance to Firestore:', err);
+      });
 
       return {
         ...prev,
@@ -310,6 +538,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       corrections: [newCorrection, ...prev.corrections],
     }));
 
+    // Save to Firestore
+    saveCorrectionToFirestore(newCorrection).catch((err: unknown) => {
+      console.warn('Could not sync correction request to Firestore:', err);
+    });
+
     addToast('Correction request submitted to the lab coordinator for review', 'success', 'Request Sent');
   }, [state.attendanceRecords, addToast]);
 
@@ -318,12 +551,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!correction) return;
 
     setState(prev => {
-      // If approved, update attendance record too
       let updatedAttendance = prev.attendanceRecords;
       if (status === 'approved') {
         updatedAttendance = prev.attendanceRecords.map(rec => {
           if (rec.id === correction.recordId) {
-            return {
+            const updated: AttendanceRecord = {
               ...rec,
               status: correction.requestedStatus,
               note: `Correction approved: ${correction.reason}`,
@@ -337,6 +569,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 },
               ],
             };
+            saveAttendanceToFirestore(updated).catch(console.warn);
+            return updated;
           }
           return rec;
         });
@@ -349,6 +583,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     });
 
+    // Update in Firestore
+    updateCorrectionInFirestore(correctionId, status).catch(console.warn);
+
     addToast(`Correction request ${status}`, status === 'approved' ? 'success' : 'info');
   }, [state.corrections, addToast]);
 
@@ -356,7 +593,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const session = state.sessions.find(s => s.id === sessionId);
     if (!session) return null;
 
-    // Find a student who is not yet checked in
     const checkedInStudentIds = new Set(
       state.attendanceRecords
         .filter(r => r.sessionId === sessionId && (r.status === 'present' || r.status === 'late'))
@@ -372,15 +608,104 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const randomIndex = Math.floor(Math.random() * availableStudents.length);
     const chosenStudent = availableStudents[randomIndex];
 
-    checkInStudent(sessionId, chosenStudent.id, 'Simulated QR Scan');
+    let simulatedCoords: CheckInCoords | undefined = undefined;
+    if (session.geofence && session.geofence.enabled) {
+      // 0.0001 deg is approx 11m
+      const offsetLat = (Math.random() - 0.5) * 0.0002;
+      const offsetLng = (Math.random() - 0.5) * 0.0002;
+      simulatedCoords = {
+        latitude: session.geofence.latitude + offsetLat,
+        longitude: session.geofence.longitude + offsetLng,
+        accuracy: 8,
+      };
+    }
+
+    checkInStudent(sessionId, chosenStudent.id, 'Simulated Proximity Scan', simulatedCoords);
     return chosenStudent;
   }, [state.sessions, state.attendanceRecords, state.students, checkInStudent, addToast]);
+
+  const loginWithEmail = async (email: string, pass: string): Promise<User> => {
+    try {
+      const userProfile = await signInUser(email, pass);
+      setState(prev => ({
+        ...prev,
+        currentUser: userProfile,
+        currentRole: userProfile.role,
+      }));
+      addToast(`Signed in as ${userProfile.name} (${userProfile.role})`, 'success', 'Authenticated');
+      return userProfile;
+    } catch (err: any) {
+      addToast(err.message || 'Failed to sign in', 'error', 'Authentication Error');
+      throw err;
+    }
+  };
+
+  const registerWithEmail = async (
+    email: string,
+    pass: string,
+    name: string,
+    role: UserRole = 'student',
+    studentId?: string
+  ): Promise<User> => {
+    try {
+      const userProfile = await signUpUser(email, pass, name, role, studentId);
+      setState(prev => ({
+        ...prev,
+        currentUser: userProfile,
+        currentRole: userProfile.role,
+      }));
+      addToast(`Account created for ${userProfile.name}`, 'success', 'Welcome');
+      return userProfile;
+    } catch (err: any) {
+      addToast(err.message || 'Failed to register', 'error', 'Registration Error');
+      throw err;
+    }
+  };
+
+  const createCoordinatorInviteLink = async (): Promise<CoordinatorInvite> => {
+    if (!firebaseUser || state.currentRole !== 'coordinator') {
+      throw new Error('Sign in with a coordinator account to create an onboarding link.');
+    }
+    return createCoordinatorInvite(firebaseUser.uid);
+  };
+
+  const registerCoordinatorFromInvite = async (token: string, email: string, pass: string, name: string): Promise<User> => {
+    const userProfile = await signUpCoordinatorWithInvite(token, email, pass, name);
+    setState(prev => ({ ...prev, currentUser: userProfile, currentRole: 'coordinator' }));
+    addToast(`Coordinator account created for ${userProfile.name}`, 'success', 'Welcome');
+    return userProfile;
+  };
+
+  const logoutFirebase = async () => {
+    await signOutUser();
+    addToast('Signed out of Firebase account', 'info');
+  };
+
+  const syncToCloud = async () => {
+    try {
+      for (const s of state.sessions) {
+        await saveSessionToFirestore(s);
+      }
+      for (const a of state.attendanceRecords) {
+        await saveAttendanceToFirestore(a);
+      }
+      for (const c of state.corrections) {
+        await saveCorrectionToFirestore(c);
+      }
+      setIsCloudConnected(true);
+      addToast('All local data successfully synchronized to Firebase Firestore!', 'success', 'Cloud Synced');
+    } catch (err: any) {
+      addToast('Failed to sync to Firebase: ' + err.message, 'error');
+    }
+  };
 
   return (
     <AppContext.Provider
       value={{
         currentRole: state.currentRole,
         currentUser: state.currentUser,
+        firebaseUser,
+        isCloudConnected,
         students: state.students,
         sessions: state.sessions,
         attendanceRecords: state.attendanceRecords,
@@ -398,6 +723,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitCorrectionRequest,
         updateCorrectionStatus,
         simulateRandomArrival,
+        loginWithEmail,
+        registerWithEmail,
+        createCoordinatorInvite: createCoordinatorInviteLink,
+        registerCoordinatorWithInvite: registerCoordinatorFromInvite,
+        logoutFirebase,
+        syncToCloud,
       }}
     >
       {children}

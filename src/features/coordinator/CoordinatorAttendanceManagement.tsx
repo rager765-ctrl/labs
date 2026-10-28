@@ -10,8 +10,10 @@ import {
   Edit3,
   History,
   Download,
+  MapPin,
 } from 'lucide-react';
 import { formatTime, formatFullDateTime } from '../../services/storage';
+import { formatDistance } from '../../services/geoService';
 
 export const CoordinatorAttendanceManagement: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -240,7 +242,28 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
                         <StatusBadge status={status} size="sm" />
                       </td>
                       <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--color-ink-700)' }}>
-                        {record?.checkedInAt ? formatTime(record.checkedInAt) : '—'}
+                        {record?.checkedInAt ? (
+                          <div>
+                            <div>{formatTime(record.checkedInAt)}</div>
+                            {record.location && (
+                              <div
+                                style={{
+                                  fontSize: '10px',
+                                  fontWeight: 600,
+                                  color: record.location.isWithinGeofence ? 'var(--color-success-700)' : 'var(--color-danger-700)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '2px',
+                                  marginTop: '2px',
+                                }}
+                                title={`±${record.location.accuracy}m accuracy at (${record.location.latitude.toFixed(5)}, ${record.location.longitude.toFixed(5)})`}
+                              >
+                                <MapPin size={9} />
+                                <span>{formatDistance(record.location.distanceMeters)}</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : '—'}
                       </td>
                       <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--color-ink-700)' }}>
                         {record?.checkedOutAt ? formatTime(record.checkedOutAt) : '—'}

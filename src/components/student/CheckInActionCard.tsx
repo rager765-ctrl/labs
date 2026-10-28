@@ -111,6 +111,24 @@ export const CheckInActionCard: React.FC<CheckInActionCardProps> = ({
           <MapPin size={14} color="var(--color-ink-500)" />
           <span>{session.room}</span>
         </div>
+        {session.geofence && session.geofence.enabled && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: 'var(--color-brand-50)',
+              color: 'var(--color-brand-700)',
+              padding: '2px 8px',
+              borderRadius: 'var(--radius-pill)',
+              fontSize: '11px',
+              fontWeight: 600,
+            }}
+          >
+            <MapPin size={11} />
+            <span>GPS Geofenced ({session.geofence.radiusMeters}m)</span>
+          </div>
+        )}
       </div>
 
       {/* Current Attendance State Feedback */}

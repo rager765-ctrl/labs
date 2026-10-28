@@ -60,6 +60,14 @@ export function createInitialSessions(): LabSession[] {
       qrCode: 'SESSION-CS301-304B-8492',
       description: 'Hands-on indexing, query execution planning, and distributed transaction locks.',
       notes: 'Please bring your university ID and have pgAdmin or DBeaver installed on your laptop.',
+      geofence: {
+        enabled: true,
+        latitude: 37.774929,
+        longitude: -122.419416,
+        radiusMeters: 75,
+        venueName: 'Room 304B, Turing Hall',
+        strictEnforcement: true,
+      },
     },
     {
       id: 'session-2',
@@ -79,6 +87,14 @@ export function createInitialSessions(): LabSession[] {
       qrCode: 'SESSION-CS304-201A-3914',
       description: 'POSIX thread synchronization, mutex lock evaluation, and memory paging simulations.',
       notes: 'C compiler and gdb required.',
+      geofence: {
+        enabled: true,
+        latitude: 37.775312,
+        longitude: -122.418915,
+        radiusMeters: 60,
+        venueName: 'Room 201A, Lovelace Building',
+        strictEnforcement: true,
+      },
     },
     {
       id: 'session-3',
@@ -97,6 +113,14 @@ export function createInitialSessions(): LabSession[] {
       pin: '5170',
       qrCode: 'SESSION-EE210-LAB3-5170',
       description: 'ESP32 SPI communication, interrupt handling, and ADC telemetry gathering.',
+      geofence: {
+        enabled: true,
+        latitude: 37.774521,
+        longitude: -122.420102,
+        radiusMeters: 80,
+        venueName: 'Hardware Lab 3, Faraday Wing',
+        strictEnforcement: false,
+      },
     },
     {
       id: 'session-4',
