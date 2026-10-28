@@ -47,8 +47,12 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
     );
   }
 
-  // Manual roster includes every registered Firestore user whose role is student.
-  const registeredStudents = students.filter(student => student.role === 'student');
+  // Use the session's saved roster so students who register after it ended are not marked missed.
+  const sessionRosterIds = new Set([
+    ...(session.eligibleStudentIds || []),
+    ...attendanceRecords.filter(record => record.sessionId === session.id).map(record => record.studentId),
+  ]);
+  const registeredStudents = students.filter(student => student.role === 'student' && sessionRosterIds.has(student.id));
 
   // Map each student with their attendance record
   const studentRoster = registeredStudents.map(student => {

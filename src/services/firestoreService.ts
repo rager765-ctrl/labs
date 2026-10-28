@@ -210,7 +210,7 @@ export const saveCorrectionToFirestore = async (correction: CorrectionRequest): 
 // Update Correction Status
 export const updateCorrectionInFirestore = async (
   correctionId: string,
-  status: 'approved' | 'rejected'
+  status: 'approved' | 'rejected' | 'resolved'
 ): Promise<void> => {
   const docRef = doc(db, CORRECTIONS_COLLECTION, correctionId);
   await updateDoc(docRef, { status });

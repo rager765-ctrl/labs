@@ -144,7 +144,7 @@ export const CoordinatorProfile: React.FC = () => {
 
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-ink-900)', margin: 0 }}>
+                <h2 style={{ fontFamily: 'var(--font-display, "Squada One", sans-serif)', fontSize: '20px', fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase', color: 'var(--color-ink-900)', margin: 0 }}>
                   {currentUser?.name || 'Coordinator'}
                 </h2>
                 <span

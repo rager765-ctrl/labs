@@ -94,9 +94,12 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifi
             </div>
             <h1
               style={{
-                fontSize: '20px',
+                fontFamily: 'var(--font-display, "Squada One", sans-serif)',
+                fontSize: '28px',
                 fontWeight: 700,
-                lineHeight: '26px',
+                letterSpacing: '0.03em',
+                textTransform: 'uppercase',
+                lineHeight: '1.15',
                 margin: 0,
                 color: '#FFFFFF',
               }}

@@ -106,7 +106,7 @@ interface AppContextValue {
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
   markAttendanceManual: (sessionId: string, studentId: string, status: AttendanceStatus, reason: string) => void;
   submitCorrectionRequest: (recordId: string, requestedStatus: AttendanceStatus, reason: string) => void;
-  updateCorrectionStatus: (correctionId: string, status: 'approved' | 'rejected') => void;
+  updateCorrectionStatus: (correctionId: string, status: 'approved' | 'rejected' | 'resolved') => void;
   simulateRandomArrival: (sessionId: string) => User | null;
   loginWithEmail: (email: string, pass: string) => Promise<User>;
   registerWithEmail: (email: string, pass: string, name: string, role?: UserRole, studentId?: string) => Promise<User>;
@@ -135,6 +135,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
+  const [cloudAttendanceReady, setCloudAttendanceReady] = useState({ sessions: false, attendance: false });
 
   // Keep state synced with localStorage as offline/fast cache
   useEffect(() => {
@@ -195,14 +196,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!firebaseUser) {
       setIsCloudConnected(false);
+      setCloudAttendanceReady({ sessions: false, attendance: false });
       return;
     }
 
     setIsCloudConnected(true);
+    setCloudAttendanceReady({ sessions: false, attendance: false });
 
     // 1. Live Lab Sessions
     const unsubSessions = subscribeToSessions((cloudSessions: LabSession[]) => {
       setState(prev => ({ ...prev, sessions: cloudSessions }));
+      setCloudAttendanceReady(prev => ({ ...prev, sessions: true }));
     });
 
     // 2. Live Registered Students
@@ -214,6 +218,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubAttendance = subscribeToAttendance(
       (cloudAttendance: AttendanceRecord[]) => {
         setState(prev => ({ ...prev, attendanceRecords: cloudAttendance }));
+        setCloudAttendanceReady(prev => ({ ...prev, attendance: true }));
       },
       state.currentUser?.role,
       firebaseUser.uid
@@ -235,6 +240,85 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubCorrections();
     };
   }, [firebaseUser, state.currentUser?.role, state.currentUser?.id]);
+
+  // Close expired sessions and record roster members who never checked in. Coordinators reconcile
+  // the full roster; students can also record their own missed status when their app is active.
+  useEffect(() => {
+    const role = state.currentUser?.role;
+    if (role !== 'coordinator' && role !== 'student') return;
+    if (firebaseUser && !(cloudAttendanceReady.sessions && cloudAttendanceReady.attendance)) return;
+
+    const finalizeEndedSessions = () => {
+      const now = Date.now();
+      const endedSessions = state.sessions.filter(session => {
+        const endTime = new Date(session.endsAt).getTime();
+        return session.status !== 'cancelled' && Number.isFinite(endTime) && endTime <= now;
+      });
+      if (endedSessions.length === 0) return;
+
+      const absentRecords: AttendanceRecord[] = [];
+      const currentStudentId = state.currentUser?.id;
+      for (const session of endedSessions) {
+        const sessionRoster = new Set(session.eligibleStudentIds || []);
+        const roster = role === 'coordinator'
+          ? sessionRoster
+          : new Set(currentStudentId && sessionRoster.has(currentStudentId) ? [currentStudentId] : []);
+        for (const studentId of roster) {
+          const existing = state.attendanceRecords.find(record => record.sessionId === session.id && record.studentId === studentId);
+          if (existing) continue;
+          const nowIso = new Date(now).toISOString();
+          absentRecords.push({
+            id: `absent-${session.id}-${studentId}`,
+            sessionId: session.id,
+            studentId,
+            status: 'absent',
+            updatedBy: 'attendance-system',
+            note: 'Missed: no attendance was verified before the session ended.',
+            audit: [{ at: nowIso, actorId: 'attendance-system', action: 'Automatically marked missed when session duration ended.' }],
+          });
+        }
+      }
+
+      const sessionsToComplete = role === 'coordinator'
+        ? endedSessions.filter(session => session.status !== 'completed')
+        : [];
+      if (absentRecords.length === 0 && sessionsToComplete.length === 0) return;
+
+      setState(previous => ({
+        ...previous,
+        sessions: role === 'coordinator'
+          ? previous.sessions.map(session =>
+              endedSessions.some(ended => ended.id === session.id) ? { ...session, status: 'completed' } : session
+            )
+          : previous.sessions,
+        attendanceRecords: [
+          ...absentRecords.filter(absent => !previous.attendanceRecords.some(record => record.sessionId === absent.sessionId && record.studentId === absent.studentId)),
+          ...previous.attendanceRecords,
+        ],
+      }));
+
+      for (const session of sessionsToComplete) {
+        updateSessionStatusInFirestore(session.id, 'completed').catch((error: unknown) => {
+          console.warn('Could not sync the automatically completed session:', error);
+        });
+      }
+      for (const record of absentRecords) {
+        saveAttendanceToFirestore(record).catch((error: unknown) => {
+          console.warn('Could not sync automatic missed attendance:', error);
+        });
+      }
+    };
+
+    finalizeEndedSessions();
+    const nextEndTime = state.sessions
+      .filter(session => session.status !== 'cancelled')
+      .map(session => new Date(session.endsAt).getTime())
+      .filter(endTime => Number.isFinite(endTime) && endTime > Date.now())
+      .sort((a, b) => a - b)[0];
+    if (!nextEndTime) return;
+    const timer = window.setTimeout(finalizeEndedSessions, Math.min(2_147_000_000, Math.max(0, nextEndTime - Date.now() + 20)));
+    return () => window.clearTimeout(timer);
+  }, [state.currentUser?.role, state.currentUser?.id, state.sessions, state.students, state.attendanceRecords, firebaseUser, cloudAttendanceReady]);
 
   const switchRole = useCallback((role: UserRole) => {
     setState(prev => ({
@@ -268,6 +352,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: session.status === 'scheduled'
           ? `Check-in is not open yet. Starts at ${new Date(session.checkInOpensAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
           : 'This practical session is completed and check-in is closed.',
+      };
+    }
+
+    if (new Date(session.endsAt).getTime() <= Date.now()) {
+      return {
+        success: false,
+        code: 'not_open',
+        message: 'This session duration has ended and attendance is now closed.',
       };
     }
 
@@ -557,6 +649,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ) => {
     const now = new Date().toISOString();
     let recordToSave: AttendanceRecord;
+    const pendingCorrections = state.corrections.filter(
+      correction => correction.sessionId === sessionId && correction.studentId === studentId && correction.status === 'pending'
+    );
 
     setState(prev => {
       const existing = prev.attendanceRecords.find(r => r.sessionId === sessionId && r.studentId === studentId);
@@ -612,8 +707,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     });
 
+    if (pendingCorrections.length > 0) {
+      const resolvedIds = new Set(pendingCorrections.map(correction => correction.id));
+      setState(prev => ({
+        ...prev,
+        corrections: prev.corrections.map(correction => resolvedIds.has(correction.id) ? { ...correction, status: 'resolved' } : correction),
+      }));
+      pendingCorrections.forEach(correction => {
+        updateCorrectionInFirestore(correction.id, 'resolved').catch((err: unknown) => {
+          console.warn('Could not sync resolved attendance correction:', err);
+        });
+      });
+    }
+
     addToast(`Student marked as ${status.toUpperCase()}`, 'success', 'Attendance Updated');
-  }, [addToast]);
+  }, [state.corrections, addToast]);
 
   const submitCorrectionRequest = useCallback((recordId: string, requestedStatus: AttendanceStatus, reason: string) => {
     const record = state.attendanceRecords.find(r => r.id === recordId);
@@ -644,7 +752,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Correction request submitted to the lab coordinator for review', 'success', 'Request Sent');
   }, [state.attendanceRecords, addToast]);
 
-  const updateCorrectionStatus = useCallback((correctionId: string, status: 'approved' | 'rejected') => {
+  const updateCorrectionStatus = useCallback((correctionId: string, status: 'approved' | 'rejected' | 'resolved') => {
     const correction = state.corrections.find(c => c.id === correctionId);
     if (!correction) return;
 
@@ -684,7 +792,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Update in Firestore
     updateCorrectionInFirestore(correctionId, status).catch(console.warn);
 
-    addToast(`Correction request ${status}`, status === 'approved' ? 'success' : 'info');
+    addToast(`Correction request ${status === 'resolved' ? 'resolved' : status}`, status === 'approved' || status === 'resolved' ? 'success' : 'info');
   }, [state.corrections, addToast]);
 
   const simulateRandomArrival = useCallback((_sessionId: string): User | null => {

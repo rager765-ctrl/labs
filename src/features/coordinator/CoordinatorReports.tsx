@@ -41,6 +41,10 @@ export const CoordinatorReports: React.FC = () => {
   );
   const filteredSessionIds = new Set(filteredSessions.map(session => session.id));
   const filteredAttendanceRecords = attendanceRecords.filter(record => filteredSessionIds.has(record.sessionId));
+  const sessionParticipantIds = new Set([
+    ...filteredSessions.flatMap(session => session.eligibleStudentIds || []),
+    ...filteredAttendanceRecords.map(record => record.studentId),
+  ]);
   const sessionMetrics = filteredSessions.map(session => ({
     session,
     metrics: calculateSessionMetrics(session, filteredAttendanceRecords),
@@ -52,7 +56,7 @@ export const CoordinatorReports: React.FC = () => {
   const cohortComplianceRate = expectedAttendance > 0 ? Math.round(((arrivedAttendance + excusedAttendance) / expectedAttendance) * 100) : 0;
 
   // Calculate students needing follow-up (attendance rate < 75%)
-  const studentsWithRates = students.map(student => {
+  const studentsWithRates = students.filter(student => sessionParticipantIds.has(student.id)).map(student => {
     const metrics = calculateStudentAttendanceMetrics(filteredAttendanceRecords, student.id);
     return {
       student,

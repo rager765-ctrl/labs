@@ -85,12 +85,14 @@
 }
 
 .splash-screen__title {
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-family: var(--font-display, 'Squada One', 'Dela Gothic One', 'Syne', sans-serif);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--color-ink-900, #171a2b);
-  margin: 0 0 6px 0;
-  line-height: 1.2;
+  margin: 0 0 4px 0;
+  line-height: 1.1;
 }
 
 .splash-screen__subtitle {

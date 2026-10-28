@@ -96,7 +96,17 @@ export const CoordinatorDashboard: React.FC = () => {
             <div style={{ fontSize: '11px', color: 'var(--color-brand-700)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Laboratory Operational Overview
             </div>
-            <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-ink-900)', margin: '2px 0 0 0' }}>
+            <h1
+              style={{
+                fontFamily: 'var(--font-display, "Squada One", sans-serif)',
+                fontSize: '28px',
+                fontWeight: 700,
+                letterSpacing: '0.03em',
+                textTransform: 'uppercase',
+                color: 'var(--color-ink-900)',
+                margin: '2px 0 0 0',
+              }}
+            >
               Welcome, {(currentUser?.name || 'Coordinator').split(' ')[0]} 👋
             </h1>
             <p style={{ fontSize: '12px', color: 'var(--color-ink-500)', margin: '2px 0 0 0' }}>

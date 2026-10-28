@@ -86,7 +86,7 @@ export interface CorrectionRequest {
   requestedStatus: AttendanceStatus;
   reason: string;
   submittedAt: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'resolved';
 }
 
 export interface ToastMessage {

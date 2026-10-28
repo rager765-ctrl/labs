@@ -323,7 +323,7 @@ export const StudentHistory: React.FC = () => {
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                         <StatusBadge status={correction.status} size="sm" />
                         <span style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>
-                          Issue reported: requested {correction.requestedStatus}
+                          {correction.status === 'resolved' || correction.status === 'approved' ? 'Issue fixed' : correction.status === 'rejected' ? 'Issue reviewed' : 'Issue reported'}: requested {correction.requestedStatus}
                         </span>
                       </div>
                     ) : (

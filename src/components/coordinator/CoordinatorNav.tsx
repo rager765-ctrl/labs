@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, CalendarDays, PlusCircle, BarChart3, User } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -115,7 +115,7 @@ export const CoordinatorNav: React.FC = () => {
               )}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontFamily: 'var(--font-display, "Squada One", sans-serif)', fontSize: '15px', fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase', color: 'var(--color-ink-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {currentUser?.name || 'Coordinator'}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

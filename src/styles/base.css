@@ -1,4 +1,4 @@
-﻿@import './tokens.css';
+@import './tokens.css';
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -60,13 +60,13 @@ html, body {
 }
 
 /* Typography Helpers */
-.text-display { font: var(--text-display); }
-.text-heading { font: var(--text-heading); }
+.text-display { font: var(--text-display); letter-spacing: 0.03em; text-transform: uppercase; }
+.text-heading { font: var(--text-heading); letter-spacing: 0.02em; }
 .text-card-title { font: var(--text-card-title); }
 .text-body { font: var(--text-body); }
 .text-label { font: var(--text-label); }
 .text-caption { font: var(--text-caption); }
-.text-metric { font: var(--text-metric); }
+.text-metric { font: var(--text-metric); letter-spacing: 0.02em; }
 
 .sr-only {
   position: absolute;

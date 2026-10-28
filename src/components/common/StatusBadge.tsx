@@ -3,7 +3,7 @@ import type { AttendanceStatus, SessionStatus } from '../../types';
 import { CheckCircle2, Clock, XCircle, ShieldCheck, Radio, Calendar, CheckSquare, Ban } from 'lucide-react';
 
 interface StatusBadgeProps {
-  status: AttendanceStatus | SessionStatus | 'pending' | 'approved' | 'rejected';
+  status: AttendanceStatus | SessionStatus | 'pending' | 'approved' | 'rejected' | 'resolved';
   size?: 'sm' | 'md';
   showIcon?: boolean;
 }
@@ -80,6 +80,12 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'sm', s
       color = 'var(--color-danger-700)';
       label = 'Rejected';
       Icon = XCircle;
+      break;
+    case 'resolved':
+      bg = 'var(--color-success-100)';
+      color = 'var(--color-success-700)';
+      label = 'Fixed';
+      Icon = CheckCircle2;
       break;
   }
 

@@ -16,11 +16,13 @@
 
 /* Big ambient typographic background watermark on desktop */
 .onboarding-bg-text {
+  font-family: var(--font-display, 'Squada One', 'Dela Gothic One', 'Syne', sans-serif);
   position: absolute;
   font-size: clamp(64px, 11vw, 130px);
-  font-weight: 900;
+  font-weight: 700;
   letter-spacing: 0.08em;
-  color: rgba(101, 163, 13, 0.08);
+  text-transform: uppercase;
+  color: rgba(101, 163, 13, 0.09);
   user-select: none;
   pointer-events: none;
   white-space: nowrap;
@@ -120,13 +122,14 @@
 }
 
 .onboarding-card__badge {
+  font-family: var(--font-display, 'Squada One', 'Dela Gothic One', 'Syne', sans-serif);
   position: absolute;
   top: 10px;
   left: 10px;
   background: rgba(18, 30, 20, 0.72);
   backdrop-filter: blur(8px);
   color: #ffffff;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -232,12 +235,14 @@
 }
 
 .onboarding-title {
-  font-size: 22px;
-  font-weight: 800;
+  font-family: var(--font-display, 'Squada One', 'Dela Gothic One', 'Syne', sans-serif);
+  font-size: 28px;
+  font-weight: 700;
+  text-transform: uppercase;
   color: #111827;
-  letter-spacing: -0.025em;
+  letter-spacing: 0.03em;
   margin: 0 0 10px 0;
-  line-height: 1.25;
+  line-height: 1.15;
 }
 
 .onboarding-description {
@@ -334,11 +339,14 @@
 
 /* Final Get Started Button */
 .onboarding-btn-finish {
+  font-family: var(--font-display, 'Squada One', 'Dela Gothic One', 'Syne', sans-serif);
   background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%);
   color: #ffffff;
   border: none;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   padding: 12px 24px;
   border-radius: 999px;
   cursor: pointer;
