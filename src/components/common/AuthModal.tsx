@@ -258,13 +258,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
                   <div>
                     <label style={{ fontSize: '11px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-                      Member / Visitor ID
+                      Student ID
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. STU-2024-8891"
+                      inputMode="numeric"
+                      maxLength={8}
+                      placeholder="e.g. 10293847 (8 digits)"
                       value={studentId}
-                      onChange={(e) => setStudentId(e.target.value)}
+                      onChange={(e) => setStudentId(e.target.value.replace(/\D/g, '').slice(0, 8))}
                       style={{
                         width: '100%',
                         height: '40px',

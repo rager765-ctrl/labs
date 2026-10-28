@@ -264,10 +264,10 @@ export const listenToAuthChanges = (
       } else {
         const fallback: User = {
           id: fbUser.uid,
-          name: fbUser.displayName || 'University Member',
+          name: fbUser.displayName || 'Student',
           email: fbUser.email || '',
           role: 'student',
-          studentId: 'STU-' + fbUser.uid.substring(0, 6).toUpperCase(),
+          studentId: Math.floor(10000000 + Math.random() * 90000000).toString(),
           programme: 'B.Sc. Computer Science',
           level: 'Level 300',
         };

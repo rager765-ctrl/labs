@@ -46,8 +46,8 @@ export const StudentProfile: React.FC = () => {
 
   const saveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (profile.name.trim().length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email.trim()) || !/^[A-Za-z0-9-]{4,}$/.test(profile.studentId.trim())) {
-      setProfileError('Enter a valid name, email, and member or visitor ID.');
+    if (profile.name.trim().length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email.trim()) || !/^\d{8}$/.test(profile.studentId.trim())) {
+      setProfileError('Enter a valid name, email, and 8-digit student ID.');
       return;
     }
     setSavingProfile(true);
@@ -56,7 +56,7 @@ export const StudentProfile: React.FC = () => {
       await updateCurrentUser({
         name: profile.name.trim(),
         email: profile.email.trim(),
-        studentId: profile.studentId.trim().toUpperCase(),
+        studentId: profile.studentId.trim(),
       });
       setEditingProfile(false);
       addToast('Profile details updated', 'success');
@@ -122,7 +122,7 @@ export const StudentProfile: React.FC = () => {
               <AuthField id="profile-name" label="Full name" autoComplete="name" placeholder="e.g. Alex Chen" icon={<User size={18} />} value={profile.name} onChange={event => updateField('name', event.target.value)} required />
               <div className="auth-row auth-row--2">
                 <AuthField id="profile-email" label="Email" type="email" autoComplete="email" inputMode="email" placeholder="you@example.com" icon={<Mail size={18} />} value={profile.email} onChange={event => updateField('email', event.target.value)} required />
-                <AuthField id="profile-student-id" label="Member / Visitor ID" placeholder="LAB-2048" autoComplete="off" icon={<IdCard size={18} />} value={profile.studentId} onChange={event => updateField('studentId', event.target.value.toUpperCase())} required />
+                <AuthField id="profile-student-id" label="Student ID" placeholder="e.g. 10293847 (8 digits)" inputMode="numeric" maxLength={8} autoComplete="off" icon={<IdCard size={18} />} value={profile.studentId} onChange={event => updateField('studentId', event.target.value.replace(/\D/g, '').slice(0, 8))} required />
               </div>
               {profileError && <p role="alert" style={{ color: 'var(--color-danger-700)', fontSize: '12px', margin: 0 }}>{profileError}</p>}
               <button type="submit" className="btn-primary" disabled={savingProfile} style={{ alignSelf: 'flex-start', gap: '7px' }}>
@@ -174,7 +174,7 @@ export const StudentProfile: React.FC = () => {
                 </span>
               </div>
               <div style={{ fontSize: '12px', color: 'var(--color-brand-600)', fontWeight: 600, marginTop: '2px' }}>
-                ID: {currentUser?.studentId || 'VISITOR'}
+                Student ID: {currentUser?.studentId || 'NOT SET'}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--color-ink-500)', marginTop: '2px' }}>
                 {currentUser?.email || 'attendee@example.com'}

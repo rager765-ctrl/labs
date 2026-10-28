@@ -3,7 +3,7 @@ import type { User, LabSession, AttendanceRecord, CorrectionRequest } from '../t
 export const CURRENT_STUDENT: User = {
   id: 'user-student-1',
   name: 'Alex Chen',
-  studentId: 'STU-2024-8891',
+  studentId: '20248891',
   email: 'a.chen@university.edu',
   role: 'student',
   programme: 'B.Sc. Computer Science',
@@ -24,13 +24,13 @@ export const CURRENT_COORDINATOR: User = {
 
 export const MOCK_STUDENTS: User[] = [
   CURRENT_STUDENT,
-  { id: 'user-student-2', name: 'Maya Lin', studentId: 'STU-2024-8892', email: 'm.lin@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
-  { id: 'user-student-3', name: 'Liam Johnson', studentId: 'STU-2024-8893', email: 'l.johnson@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
-  { id: 'user-student-4', name: 'Sophia Patel', studentId: 'STU-2024-8894', email: 's.patel@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
-  { id: 'user-student-5', name: 'Noah Williams', studentId: 'STU-2024-8895', email: 'n.williams@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
-  { id: 'user-student-6', name: 'Chloe Davis', studentId: 'STU-2024-8896', email: 'c.davis@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
-  { id: 'user-student-7', name: 'Ethan Brown', studentId: 'STU-2024-8897', email: 'e.brown@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
-  { id: 'user-student-8', name: 'Olivia Miller', studentId: 'STU-2024-8898', email: 'o.miller@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
+  { id: 'user-student-2', name: 'Maya Lin', studentId: '20248892', email: 'm.lin@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
+  { id: 'user-student-3', name: 'Liam Johnson', studentId: '20248893', email: 'l.johnson@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
+  { id: 'user-student-4', name: 'Sophia Patel', studentId: '20248894', email: 's.patel@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
+  { id: 'user-student-5', name: 'Noah Williams', studentId: '20248895', email: 'n.williams@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
+  { id: 'user-student-6', name: 'Chloe Davis', studentId: '20248896', email: 'c.davis@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
+  { id: 'user-student-7', name: 'Ethan Brown', studentId: '20248897', email: 'e.brown@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
+  { id: 'user-student-8', name: 'Olivia Miller', studentId: '20248898', email: 'o.miller@uni.edu', role: 'student', programme: 'B.Sc. Computer Science', level: 'Level 300' },
 ];
 
 export function getRelativeDate(dayOffset: number, hours: number, minutes: number = 0): string {

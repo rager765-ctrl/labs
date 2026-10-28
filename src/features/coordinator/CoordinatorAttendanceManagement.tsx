@@ -251,7 +251,7 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
               <thead>
                 <tr style={{ backgroundColor: 'var(--color-brand-50)', borderBottom: '1px solid var(--color-line)', color: 'var(--color-ink-700)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' }}>
                   <th style={{ padding: '12px 16px' }}>Attendee</th>
-                  <th style={{ padding: '12px 16px' }}>Member / Visitor ID</th>
+                  <th style={{ padding: '12px 16px' }}>Student ID</th>
                   <th style={{ padding: '12px 16px' }}>Status</th>
                   <th style={{ padding: '12px 16px' }}>Check-In</th>
                   <th style={{ padding: '12px 16px' }}>Check-Out</th>
@@ -262,7 +262,7 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
                 {studentRoster.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: 'var(--color-ink-500)' }}>
-                      No visitors match the current search or status.
+                      No attendees match the current search or status.
                     </td>
                   </tr>
                 ) : (

@@ -37,7 +37,7 @@ export const SignupPage: React.FC = () => {
     const e: Errors = {};
     if (form.name.trim().length < 2) e.name = 'Enter your full name.';
     if (!EMAIL_RE.test(form.email.trim())) e.email = 'Enter a valid email address.';
-    if (!/^[A-Za-z0-9-]{4,}$/.test(form.studentId.trim())) e.studentId = 'Enter a valid member or visitor ID.';
+    if (!/^\d{8}$/.test(form.studentId.trim())) e.studentId = 'Enter a valid 8-digit student ID.';
     const pc = passwordChecks(form.password);
     if (!pc.length) e.password = 'Use at least 8 characters.';
     else if (!(pc.upper && pc.number)) e.password = 'Add an uppercase letter and a number.';
@@ -90,9 +90,10 @@ export const SignupPage: React.FC = () => {
             value={form.email} onChange={e => set('email', e.target.value)} error={errors.email} required
           />
           <AuthField
-            id="signup-student-id" label="Member / Visitor ID" placeholder="e.g. LAB-2048" autoComplete="off"
+            id="signup-student-id" label="Student ID" placeholder="e.g. 10293847 (8 digits)" autoComplete="off"
+            inputMode="numeric" maxLength={8}
             icon={<IdCard size={18} />} value={form.studentId}
-            onChange={e => set('studentId', e.target.value.toUpperCase())} error={errors.studentId} required
+            onChange={e => set('studentId', e.target.value.replace(/\D/g, '').slice(0, 8))} error={errors.studentId} required
           />
         </div>
 
