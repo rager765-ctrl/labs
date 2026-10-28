@@ -42,6 +42,7 @@ const AppContent: React.FC = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/coordinator-signup" element={<CoordinatorSignupPage />} />
+        <Route path="/signup/coordinator" element={<CoordinatorSignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
         {/* Student Routes protected with RBAC */}

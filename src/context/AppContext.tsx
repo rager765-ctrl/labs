@@ -22,6 +22,7 @@ import {
   listenToAuthChanges,
   signInUser,
   signUpUser,
+  signUpCoordinator,
   signOutUser,
   signUpCoordinatorWithInvite,
 } from '../services/authService';
@@ -105,6 +106,15 @@ interface AppContextValue {
   registerWithEmail: (email: string, pass: string, name: string, role?: UserRole, studentId?: string) => Promise<User>;
   createCoordinatorInvite: () => Promise<CoordinatorInvite>;
   registerCoordinatorWithInvite: (token: string, email: string, pass: string, name: string) => Promise<User>;
+  registerCoordinator: (
+    email: string,
+    pass: string,
+    name: string,
+    staffId: string,
+    department: string,
+    designation: string,
+    inviteToken?: string
+  ) => Promise<User>;
   logoutFirebase: () => Promise<void>;
   syncToCloud: () => Promise<void>;
 }
@@ -692,6 +702,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return userProfile;
   };
 
+  const registerCoordinator = async (
+    email: string,
+    pass: string,
+    name: string,
+    staffId: string,
+    department: string,
+    designation: string,
+    inviteToken?: string
+  ): Promise<User> => {
+    try {
+      const userProfile = await signUpCoordinator(
+        email,
+        pass,
+        name,
+        staffId,
+        department,
+        designation,
+        inviteToken
+      );
+      setState(prev => ({
+        ...prev,
+        currentUser: userProfile,
+        currentRole: 'coordinator',
+      }));
+      addToast(`Coordinator account created for ${userProfile.name}`, 'success', 'Welcome Faculty Coordinator');
+      return userProfile;
+    } catch (err: any) {
+      addToast(err.message || 'Failed to create coordinator account', 'error', 'Registration Error');
+      throw err;
+    }
+  };
+
   const logoutFirebase = async () => {
     await signOutUser();
     addToast('Signed out of Firebase account', 'info');
@@ -743,6 +785,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         registerWithEmail,
         createCoordinatorInvite: createCoordinatorInviteLink,
         registerCoordinatorWithInvite: registerCoordinatorFromInvite,
+        registerCoordinator,
         logoutFirebase,
         syncToCloud,
       }}

@@ -98,8 +98,13 @@ export const LoginPage: React.FC = () => {
         </div>
       </form>
 
-      <div className="auth-footer">
-        New student? <Link to="/signup" className="auth-link" id="login-to-signup">Create an account</Link>
+      <div className="auth-footer" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div>
+          New student? <Link to="/signup" className="auth-link" id="login-to-signup">Create a student account</Link>
+        </div>
+        <div style={{ fontSize: '12px', color: 'var(--color-ink-400)' }}>
+          Lab Coordinator? <Link to="/coordinator-signup" className="auth-link" id="login-to-coordinator-signup">Register faculty account</Link>
+        </div>
       </div>
     </AuthLayout>
   );

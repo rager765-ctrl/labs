@@ -7,7 +7,7 @@ import {
   deleteUser,
 } from 'firebase/auth';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, setDoc, getDoc, runTransaction } from 'firebase/firestore';
+import { doc, setDoc, getDoc, runTransaction, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import type { User, UserRole } from '../types';
 import { getStoredDemoInvites, DEMO_INVITES_STORAGE_KEY } from './firestoreService';
@@ -72,6 +72,49 @@ export const signUpUser = async (
 
   const userDocRef = doc(db, 'users', fbUser.uid);
   await setDoc(userDocRef, profile);
+
+  return profile;
+};
+
+export const signUpCoordinator = async (
+  email: string,
+  password: string,
+  name: string,
+  staffId: string,
+  department: string,
+  designation: string,
+  inviteToken?: string
+): Promise<User> => {
+  const credential = await createUserWithEmailAndPassword(auth, email, password);
+  const fbUser = credential.user;
+
+  await updateProfile(fbUser, { displayName: name });
+
+  const profile: User = {
+    id: fbUser.uid,
+    name,
+    email: fbUser.email || email,
+    role: 'coordinator',
+    studentId: staffId.trim() || `FAC-${fbUser.uid.substring(0, 6).toUpperCase()}`,
+    programme: department.trim() || 'School of Computing & Data Science',
+    level: designation.trim() || 'Senior Lab Coordinator',
+    onboardingInvite: inviteToken || undefined,
+  };
+
+  const userDocRef = doc(db, 'users', fbUser.uid);
+  await setDoc(userDocRef, profile);
+
+  // If an invite token was attached, update it in storage/Firestore
+  if (inviteToken) {
+    const demoInvites = getStoredDemoInvites();
+    if (demoInvites[inviteToken]) {
+      demoInvites[inviteToken].usedBy = fbUser.uid;
+      localStorage.setItem(DEMO_INVITES_STORAGE_KEY, JSON.stringify(demoInvites));
+    } else {
+      const inviteRef = doc(db, 'coordinatorInvites', inviteToken);
+      await updateDoc(inviteRef, { usedBy: fbUser.uid, usedAt: Date.now() }).catch(() => undefined);
+    }
+  }
 
   return profile;
 };
