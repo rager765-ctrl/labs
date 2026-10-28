@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { StudentBottomNav } from '../../components/student/StudentBottomNav';
-import { Bell, Check, LogOut, LogIn, UserPlus, User, Mail, IdCard, Pencil, X, Save, HelpCircle } from 'lucide-react';
+import { Check, LogOut, LogIn, UserPlus, User, Mail, IdCard, Pencil, X, Save, HelpCircle } from 'lucide-react';
 import { AuthField } from '../auth/AuthComponents';
 import { ThemeToggle } from '../../components/common/ThemeToggle';
+import { PushNotificationSettings } from '../../components/common/PushNotificationSettings';
 
 export const StudentProfile: React.FC = () => {
   const navigate = useNavigate();
@@ -69,9 +70,7 @@ export const StudentProfile: React.FC = () => {
     }
   };
 
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [labReminders, setLabReminders] = useState(true);
-  const [lateAlerts, setLateAlerts] = useState(false);
+
 
   return (
     <div
@@ -204,73 +203,8 @@ export const StudentProfile: React.FC = () => {
 
         <ThemeToggle />
 
-        {/* Notification Preferences */}
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--color-line)',
-            padding: '16px',
-            boxShadow: 'var(--shadow-card)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-            <Bell size={18} color="var(--color-brand-600)" />
-            <h2 style={{ fontSize: '14px', fontWeight: 700, margin: 0 }}>
-              Attendance Preferences (Demo)
-            </h2>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: 600 }}>Meeting Session Reminders</div>
-                <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>Notify 15 minutes before check-in opens</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={labReminders}
-                onChange={(e) => {
-                  setLabReminders(e.target.checked);
-                  addToast('Preference updated', 'info');
-                }}
-                style={{ width: '18px', height: '18px', accentColor: 'var(--color-brand-700)' }}
-              />
-            </label>
-
-            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: 600 }}>Check-in Confirmation Receipts</div>
-                <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>Receive instant verified digital pass</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={notificationsEnabled}
-                onChange={(e) => {
-                  setNotificationsEnabled(e.target.checked);
-                  addToast('Preference updated', 'info');
-                }}
-                style={{ width: '18px', height: '18px', accentColor: 'var(--color-brand-700)' }}
-              />
-            </label>
-
-            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: 600 }}>Late Arrival Warnings</div>
-                <div style={{ fontSize: '11px', color: 'var(--color-ink-500)' }}>Alert when 15-minute threshold is approaching</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={lateAlerts}
-                onChange={(e) => {
-                  setLateAlerts(e.target.checked);
-                  addToast('Preference updated', 'info');
-                }}
-                style={{ width: '18px', height: '18px', accentColor: 'var(--color-brand-700)' }}
-              />
-            </label>
-          </div>
-        </div>
+        {/* Real FCM Push Notifications Configuration */}
+        <PushNotificationSettings />
 
         {/* Account & Session Section */}
         <div

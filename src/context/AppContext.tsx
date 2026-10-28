@@ -47,6 +47,12 @@ import {
   formatDistance,
   getDeviceCurrentPosition,
 } from '../services/geoService';
+import {
+  notifySessionLive,
+  notifySessionScheduled,
+  notifyCorrectionDecision,
+  setupForegroundNotificationListener,
+} from '../services/fcmClientService';
 import type { AttendanceLocation } from '../types';
 
 export interface CheckInCoords {
@@ -240,6 +246,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubCorrections();
     };
   }, [firebaseUser, state.currentUser?.role, state.currentUser?.id]);
+
+  // Listen for foreground push notifications and display notification toast
+  useEffect(() => {
+    let unsubPromise: Promise<(() => void) | null> | null = null;
+    unsubPromise = setupForegroundNotificationListener(payload => {
+      if (payload.title) {
+        addToast(payload.body || 'New session or attendance update.', 'info', payload.title);
+      }
+    });
+
+    return () => {
+      if (unsubPromise) {
+        unsubPromise.then(unsub => {
+          if (unsub) unsub();
+        });
+      }
+    };
+  }, [addToast]);
 
   // Close expired sessions and record roster members who never checked in. Coordinators reconcile
   // the full roster; students can also record their own missed status when their app is active.
@@ -593,6 +617,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await saveSessionToFirestore(newSession);
       addToast(`Session "${newSession.title}" scheduled successfully`, 'success', 'Session Created');
+
+      // Dispatch FCM push notification to subscribed user accounts
+      notifySessionScheduled(newSession).catch((err) => {
+        console.warn('Could not fire scheduled session push notification:', err);
+      });
     } catch (err: any) {
       console.warn('Could not sync created session to Firestore:', err);
       addToast('Session saved, but may not be visible on other devices yet.', 'info');
@@ -602,6 +631,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [firebaseUser?.uid, state.currentUser?.id, addToast]);
 
   const updateSessionStatus = useCallback((sessionId: string, status: SessionStatus) => {
+    const existingSession = state.sessions.find(s => s.id === sessionId);
+
     setState(prev => ({
       ...prev,
       sessions: prev.sessions.map(s => s.id === sessionId ? { ...s, status } : s),
@@ -612,8 +643,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Could not sync session status to Firestore:', err);
     });
 
+    // When a coordinator toggles a session live, fire push notifications
+    if (status === 'live' && existingSession) {
+      notifySessionLive({ ...existingSession, status: 'live' }).catch((err) => {
+        console.warn('Could not fire live session push notification:', err);
+      });
+    }
+
     addToast(`Session status updated to ${status.toUpperCase()}`, 'info');
-  }, [addToast]);
+  }, [state.sessions, addToast]);
 
   const updateSession = useCallback((sessionId: string, updates: Omit<LabSession, 'id' | 'status' | 'coordinatorId'>) => {
     const existing = state.sessions.find(session => session.id === sessionId);
@@ -717,11 +755,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateCorrectionInFirestore(correction.id, 'resolved').catch((err: unknown) => {
           console.warn('Could not sync resolved attendance correction:', err);
         });
+
+        // Fire FCM push notification to student about resolution
+        const sessionObj = state.sessions.find(s => s.id === sessionId);
+        notifyCorrectionDecision({
+          studentId: correction.studentId,
+          sessionTitle: sessionObj?.title || 'Lab Session',
+          status: 'resolved',
+          decisionReason: reason || `Coordinator manually resolved attendance to ${status.toUpperCase()}`,
+        }).catch(err => {
+          console.warn('Could not fire manual resolution push notification:', err);
+        });
       });
     }
 
     addToast(`Attendee marked as ${status.toUpperCase()}`, 'success', 'Attendance Updated');
-  }, [state.corrections, addToast]);
+  }, [state.corrections, state.sessions, addToast]);
 
   const submitCorrectionRequest = useCallback((recordId: string, requestedStatus: AttendanceStatus, reason: string) => {
     const record = state.attendanceRecords.find(r => r.id === recordId);
@@ -755,6 +804,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateCorrectionStatus = useCallback((correctionId: string, status: 'approved' | 'rejected' | 'resolved') => {
     const correction = state.corrections.find(c => c.id === correctionId);
     if (!correction) return;
+    const sessionObj = state.sessions.find(s => s.id === correction.sessionId);
 
     setState(prev => {
       let updatedAttendance = prev.attendanceRecords;
@@ -792,8 +842,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Update in Firestore
     updateCorrectionInFirestore(correctionId, status).catch(console.warn);
 
+    // Fire FCM push notification to the affected student account
+    notifyCorrectionDecision({
+      studentId: correction.studentId,
+      sessionTitle: sessionObj?.title || 'Session',
+      status,
+      decisionReason: correction.reason,
+    }).catch(err => {
+      console.warn('Could not fire correction decision push notification:', err);
+    });
+
     addToast(`Correction request ${status === 'resolved' ? 'resolved' : status}`, status === 'approved' || status === 'resolved' ? 'success' : 'info');
-  }, [state.corrections, addToast]);
+  }, [state.corrections, state.sessions, addToast]);
 
   const simulateRandomArrival = useCallback((_sessionId: string): User | null => {
     return null;

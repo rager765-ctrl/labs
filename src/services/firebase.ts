@@ -23,10 +23,20 @@ export const db = initializeFirestore(app, {
   ignoreUndefinedProperties: true,
 });
 
+import { getMessaging, isSupported as isMessagingSupported } from 'firebase/messaging';
+
 // Initialize Analytics conditionally where supported (browser environment)
 export const initAnalytics = async () => {
   if (typeof window !== 'undefined' && (await isSupported())) {
     return getAnalytics(app);
+  }
+  return null;
+};
+
+// Initialize Firebase Messaging (FCM) conditionally where supported
+export const initMessaging = async () => {
+  if (typeof window !== 'undefined' && (await isMessagingSupported())) {
+    return getMessaging(app);
   }
   return null;
 };

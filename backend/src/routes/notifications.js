@@ -253,17 +253,50 @@ router.post('/session-alert', requireFirebase, async (req, res) => {
 
         return res.json({
           success: true,
-          mode: 'multicast',
+          mode: 'multicast_eligible',
           delivered: response.successCount,
           failed: response.failureCount,
         });
       }
     }
 
+    // If no eligibleStudentIds specified or no tokens found in eligible list, send to all subscribed attendees
+    if (db) {
+      try {
+        const allUsersSnap = await db.collection('users').get();
+        const allTokens = [];
+        allUsersSnap.forEach(d => {
+          const udata = d.data();
+          if (Array.isArray(udata.fcmTokens) && udata.notificationsEnabled !== false) {
+            allTokens.push(...udata.fcmTokens);
+          }
+        });
+
+        if (allTokens.length > 0) {
+          const uniqueAll = Array.from(new Set(allTokens));
+          const response = await messaging.sendEachForMulticast({
+            tokens: uniqueAll,
+            notification: { title, body },
+            data: { sessionId, targetUrl },
+            webpush: { fcmOptions: { link: targetUrl } },
+          });
+
+          return res.json({
+            success: true,
+            mode: 'multicast_all',
+            delivered: response.successCount,
+            failed: response.failureCount,
+          });
+        }
+      } catch (err) {
+        console.warn('Could not multicast to all users from Firestore:', err);
+      }
+    }
+
     // Fallback: Broadcast to general topic
-    const topic = `session-${sessionId}`;
+    const topic = 'all-students';
     const response = await messaging.send({
-      topic: 'all-students',
+      topic,
       notification: { title, body },
       data: { sessionId, targetUrl },
       webpush: { fcmOptions: { link: targetUrl } },
@@ -298,25 +331,39 @@ router.post('/correction-alert', requireFirebase, async (req, res) => {
       });
     }
 
-    const title = `Correction ${status === 'approved' ? 'Approved ✅' : 'Rejected ❌'}`;
+    const title = `Correction ${status === 'approved' ? 'Approved ✅' : status === 'resolved' ? 'Resolved ✅' : 'Rejected ❌'}`;
     const body = `Your attendance correction for "${sessionTitle}" was ${status}.${decisionReason ? ` Note: ${decisionReason}` : ''}`;
 
     if (!db) {
       return res.status(500).json({ success: false, error: 'Database not initialized.' });
     }
 
+    let tokens = [];
     const userDoc = await db.collection('users').doc(studentId).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ success: false, error: 'Student record not found.' });
+    if (userDoc.exists) {
+      tokens = userDoc.data()?.fcmTokens || [];
+    } else {
+      // Query by studentId or id
+      const querySnap = await db.collection('users').where('studentId', '==', studentId).get();
+      if (!querySnap.empty) {
+        querySnap.forEach(d => {
+          tokens.push(...(d.data()?.fcmTokens || []));
+        });
+      } else {
+        const queryIdSnap = await db.collection('users').where('id', '==', studentId).get();
+        queryIdSnap.forEach(d => {
+          tokens.push(...(d.data()?.fcmTokens || []));
+        });
+      }
     }
 
-    const tokens = userDoc.data()?.fcmTokens || [];
     if (!tokens.length) {
       return res.json({ success: false, message: 'Student has no active FCM tokens.', sentCount: 0 });
     }
 
+    const uniqueTokens = Array.from(new Set(tokens));
     const response = await messaging.sendEachForMulticast({
-      tokens,
+      tokens: uniqueTokens,
       notification: { title, body },
       data: { type: 'correction_update', status },
       webpush: { fcmOptions: { link: '/student/history' } },

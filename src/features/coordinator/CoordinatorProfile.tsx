@@ -5,6 +5,7 @@ import { CoordinatorNav } from '../../components/coordinator/CoordinatorNav';
 import { LogOut, LogIn, User, Mail, IdCard, Building2, Award, MapPin, Pencil, X, Save, HelpCircle } from 'lucide-react';
 import { AuthField, AuthSelect } from '../auth/AuthComponents';
 import { ThemeToggle } from '../../components/common/ThemeToggle';
+import { PushNotificationSettings } from '../../components/common/PushNotificationSettings';
 import { DEPARTMENTS, DESIGNATIONS } from '../auth/CoordinatorSignupPage';
 
 export const CoordinatorProfile: React.FC = () => {
@@ -196,6 +197,11 @@ export const CoordinatorProfile: React.FC = () => {
               <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser?.labRoom || 'Not specified'}</strong>
             </div>
           </div>
+        </div>
+
+        {/* Real-time Push Notifications (FCM) Card */}
+        <div style={{ maxWidth: '600px', marginBottom: '20px' }}>
+          <PushNotificationSettings />
         </div>
 
         {/* Account & Session Section */}
