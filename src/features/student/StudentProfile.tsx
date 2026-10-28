@@ -1,8 +1,8 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { StudentBottomNav } from '../../components/student/StudentBottomNav';
-import { Bell, Check, LogOut, LogIn, UserPlus, User, Mail, IdCard, GraduationCap, Layers, Pencil, X, Save } from 'lucide-react';
+import { Bell, Check, LogOut, LogIn, UserPlus, User, Mail, IdCard, GraduationCap, Layers, Pencil, X, Save, HelpCircle } from 'lucide-react';
 import { AuthField, AuthSelect } from '../auth/AuthComponents';
 import { LEVELS, PROGRAMMES } from '../auth/SignupPage';
 
@@ -337,6 +337,21 @@ export const StudentProfile: React.FC = () => {
               <div style={{ fontSize: '12px', color: 'var(--color-ink-700)' }}>
                 Signed in as <strong>{firebaseUser.email}</strong>
               </div>
+              <Link
+                to="/onboarding"
+                className="btn-secondary"
+                style={{
+                  width: '100%',
+                  height: '40px',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  textDecoration: 'none',
+                  fontSize: '13px',
+                }}
+              >
+                <HelpCircle size={15} />
+                <span>View App Walkthrough Tour</span>
+              </Link>
               <button
                 type="button"
                 onClick={async () => {

@@ -28,26 +28,56 @@ import { CoordinatorAttendanceManagement } from './features/coordinator/Coordina
 import { CoordinatorReports } from './features/coordinator/CoordinatorReports';
 import { CoordinatorProfile } from './features/coordinator/CoordinatorProfile';
 
-const AppContent: React.FC = () => {
-  const { currentRole, currentUser, authLoading } = useApp();
+// Splash and Onboarding
+import { SplashScreen } from './components/common/SplashScreen';
+import { OnboardingScreen, ONBOARDING_COMPLETED_KEY } from './features/onboarding/OnboardingScreen';
 
+const RootLanding: React.FC = () => {
+  const { currentRole, currentUser, authLoading } = useApp();
+  const [minSplashDone, setMinSplashDone] = React.useState<boolean>(false);
+
+  // Check if visitor has previously completed or skipped onboarding
+  const hasSeenOnboarding = React.useMemo(() => {
+    return localStorage.getItem(ONBOARDING_COMPLETED_KEY) === 'true';
+  }, []);
+
+  // Ensure a smooth presentation minimum (~900ms) to avoid visual jitter
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setMinSplashDone(true);
+    }, 900);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // For both old and new users during startup, show the branded splash screen with the 3 loading dots
+  if (authLoading || !minSplashDone) {
+    return <SplashScreen message="Initializing university practical session..." />;
+  }
+
+  // If user is new (has not seen onboarding and is not authenticated), show the onboarding walkthrough
+  if (!hasSeenOnboarding && !currentUser) {
+    return <OnboardingScreen />;
+  }
+
+  // For old users (or authenticated returning users), jump straight to active dashboard or login
+  if (currentUser) {
+    return <Navigate to={currentRole === 'coordinator' ? '/coordinator' : '/student'} replace />;
+  }
+
+  return <Navigate to="/login" replace />;
+};
+
+const AppContent: React.FC = () => {
   return (
     <>
       <ToastContainer />
 
       <Routes>
-        {/* Default Landing: Redirect to active role dashboard or login */}
-        <Route
-          path="/"
-          element={
-            authLoading ? null : (
-              <Navigate
-                to={currentUser ? (currentRole === 'student' ? '/student' : '/coordinator') : '/login'}
-                replace
-              />
-            )
-          }
-        />
+        {/* Default Landing: Splash with 3 dots for old users, Walkthrough for new users */}
+        <Route path="/" element={<RootLanding />} />
+
+        {/* Dedicated Walkthrough Tour Route (replayable anytime) */}
+        <Route path="/onboarding" element={<OnboardingScreen forceShow />} />
 
         {/* Auth Routes */}
         <Route path="/login" element={<LoginPage />} />

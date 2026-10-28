@@ -13,23 +13,54 @@ export const CoordinatorReports: React.FC = () => {
   const { sessions, attendanceRecords, students, addToast } = useApp();
 
   const [selectedCourse, setSelectedCourse] = useState<string>('all');
-  const [dateRange, setDateRange] = useState<'all' | 'recent' | 'month'>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
 
-  const filteredSessions = sessions.filter(s => {
-    if (selectedCourse !== 'all' && s.courseCode !== selectedCourse) return false;
-    return true;
-  });
+  const getCourseKey = (session: typeof sessions[number]) =>
+    session.courseCode?.trim().toLocaleUpperCase() || session.labName?.trim().toLocaleLowerCase() || session.title.trim().toLocaleLowerCase();
+  const getSessionMonth = (session: typeof sessions[number]) => {
+    const date = new Date(session.startsAt);
+    return Number.isNaN(date.getTime()) ? '' : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const courses = Array.from(new Map(sessions.map(session => {
+    const key = getCourseKey(session);
+    const code = session.courseCode?.trim();
+    const label = code && session.labName?.trim() ? `${code} - ${session.labName.trim()}` : code || session.labName?.trim() || session.title;
+    return [key, { key, label }] as const;
+  })).values()).sort((a, b) => a.label.localeCompare(b.label));
+  const months = Array.from(new Set(sessions.map(getSessionMonth).filter(Boolean)))
+    .sort((a, b) => b.localeCompare(a))
+    .map(key => {
+      const [year, month] = key.split('-').map(Number);
+      return { key, label: new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(new Date(year, month - 1, 1)) };
+    });
+
+  const filteredSessions = sessions.filter(session =>
+    (selectedCourse === 'all' || getCourseKey(session) === selectedCourse) &&
+    (selectedMonth === 'all' || getSessionMonth(session) === selectedMonth)
+  );
+  const filteredSessionIds = new Set(filteredSessions.map(session => session.id));
+  const filteredAttendanceRecords = attendanceRecords.filter(record => filteredSessionIds.has(record.sessionId));
+  const sessionMetrics = filteredSessions.map(session => ({
+    session,
+    metrics: calculateSessionMetrics(session, filteredAttendanceRecords),
+  }));
+  const heldSessionCount = filteredSessions.filter(session => session.status === 'completed' || session.status === 'live').length;
+  const expectedAttendance = sessionMetrics.reduce((sum, item) => sum + item.metrics.totalExpected, 0);
+  const arrivedAttendance = sessionMetrics.reduce((sum, item) => sum + item.metrics.totalArrived, 0);
+  const excusedAttendance = sessionMetrics.reduce((sum, item) => sum + item.metrics.excused, 0);
+  const cohortComplianceRate = expectedAttendance > 0 ? Math.round(((arrivedAttendance + excusedAttendance) / expectedAttendance) * 100) : 0;
 
   // Calculate students needing follow-up (attendance rate < 75%)
   const studentsWithRates = students.map(student => {
-    const metrics = calculateStudentAttendanceMetrics(attendanceRecords, student.id);
+    const metrics = calculateStudentAttendanceMetrics(filteredAttendanceRecords, student.id);
     return {
       student,
       metrics,
     };
   });
 
-  const studentsAtRisk = studentsWithRates.filter(s => s.metrics.rate < 75);
+  const studentsAtRisk = filteredSessions.length > 0 ? studentsWithRates.filter(s => s.metrics.rate < 75) : [];
 
   const handleExportReport = () => {
     addToast('Demo CSV report generated and downloaded to device', 'success', 'Export Complete');
@@ -76,19 +107,16 @@ export const CoordinatorReports: React.FC = () => {
                 fontSize: '12px',
               }}
             >
-              <option value="all">All Modules (CS301, CS304, CS310, EE210)</option>
-              <option value="CS301">CS301 Database Systems</option>
-              <option value="CS304">CS304 Operating Systems</option>
-              <option value="EE210">EE210 Embedded Systems</option>
-              <option value="CS310">CS310 Software Studio</option>
+              <option value="all">All courses</option>
+              {courses.map(course => <option key={course.key} value={course.key}>{course.label}</option>)}
             </select>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-ink-500)' }}>Time Scope:</span>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-ink-500)' }}>Month Filter:</span>
             <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value as any)}
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
               style={{
                 height: '36px',
                 borderRadius: 'var(--radius-sm)',
@@ -97,9 +125,8 @@ export const CoordinatorReports: React.FC = () => {
                 fontSize: '12px',
               }}
             >
-              <option value="all">Entire Academic Semester</option>
-              <option value="recent">Last 14 Days</option>
-              <option value="month">Current Month</option>
+              <option value="all">All months</option>
+              {months.map(month => <option key={month.key} value={month.key}>{month.label}</option>)}
             </select>
           </div>
         </div>
@@ -111,7 +138,7 @@ export const CoordinatorReports: React.FC = () => {
               LABORATORY SESSIONS HELD
             </div>
             <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-ink-900)', marginTop: '4px' }}>
-              {filteredSessions.filter(s => s.status === 'completed' || s.status === 'live').length}
+              {heldSessionCount}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-success-700)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <CheckCircle2 size={13} /> All syllabus targets on schedule
@@ -123,10 +150,10 @@ export const CoordinatorReports: React.FC = () => {
               COHORT COMPLIANCE RATE
             </div>
             <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-brand-700)', marginTop: '4px' }}>
-              89.4%
+              {cohortComplianceRate}%
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-brand-600)', marginTop: '4px' }}>
-              +3.2% vs previous semester benchmark
+              {expectedAttendance ? `${arrivedAttendance} attended, ${excusedAttendance} excused of ${expectedAttendance}` : 'No attendance data for this filter'}
             </div>
           </div>
 
@@ -152,7 +179,11 @@ export const CoordinatorReports: React.FC = () => {
             </h2>
           </div>
 
-          {studentsAtRisk.length === 0 ? (
+          {filteredSessions.length === 0 ? (
+            <div style={{ padding: '16px', backgroundColor: 'var(--color-brand-50)', borderRadius: 'var(--radius-sm)', color: 'var(--color-ink-500)', fontSize: '13px' }}>
+              No session data matches the selected course and month.
+            </div>
+          ) : studentsAtRisk.length === 0 ? (
             <div style={{ padding: '16px', backgroundColor: 'var(--color-success-100)', borderRadius: 'var(--radius-sm)', color: 'var(--color-success-700)', fontSize: '13px' }}>
               ✓ Excellent news: All students in the cohort currently meet or exceed the 75% attendance threshold!
             </div>
@@ -212,12 +243,11 @@ export const CoordinatorReports: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredSessions.map(session => {
-                  const m = calculateSessionMetrics(session, attendanceRecords);
+                {sessionMetrics.map(({ session, metrics: m }) => {
                   return (
                     <tr key={session.id} style={{ borderBottom: '1px solid var(--color-line)' }}>
                       <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--color-brand-600)' }}>
-                        {session.courseCode}
+                        {session.courseCode || session.labName}
                       </td>
                       <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--color-ink-900)' }}>
                         {session.title}
@@ -237,6 +267,13 @@ export const CoordinatorReports: React.FC = () => {
                     </tr>
                   );
                 })}
+                {filteredSessions.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '18px 12px', textAlign: 'center', color: 'var(--color-ink-500)' }}>
+                      No session data matches these filters.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { CoordinatorNav } from '../../components/coordinator/CoordinatorNav';
-import { LogOut, LogIn, User, Mail, IdCard, Building2, Award, MapPin, Pencil, X, Save } from 'lucide-react';
+import { LogOut, LogIn, User, Mail, IdCard, Building2, Award, MapPin, Pencil, X, Save, HelpCircle } from 'lucide-react';
 import { AuthField, AuthSelect } from '../auth/AuthComponents';
 import { DEPARTMENTS, DESIGNATIONS } from '../auth/CoordinatorSignupPage';
 
@@ -235,6 +235,21 @@ export const CoordinatorProfile: React.FC = () => {
               <div style={{ fontSize: '13px', color: 'var(--color-ink-700)' }}>
                 Authenticated as: <strong>{firebaseUser.email}</strong>
               </div>
+              <Link
+                to="/onboarding"
+                className="btn-secondary"
+                style={{
+                  width: '100%',
+                  height: '40px',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  textDecoration: 'none',
+                  fontSize: '13px',
+                }}
+              >
+                <HelpCircle size={16} />
+                <span>View App Walkthrough Tour</span>
+              </Link>
               <button
                 type="button"
                 onClick={async () => {

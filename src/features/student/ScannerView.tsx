@@ -42,11 +42,25 @@ export const ScannerView: React.FC = () => {
   const animFrameRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Identify today's active live or primary session
+  // A session is scoped only when a flow explicitly passes its ID. The nav scanner stays general purpose.
   const requestedSessionId = searchParams.get('sessionId');
-  const activeSession = sessions.find(s => s.id === requestedSessionId && s.status === 'live')
-    || sessions.find(s => s.status === 'live')
-    || sessions[0];
+  const activeSession = requestedSessionId
+    ? sessions.find(s => s.id === requestedSessionId && s.status === 'live')
+    : undefined;
+
+  useEffect(() => {
+    if (!sheetConfig.isOpen || !hasScannedCode) return;
+    const timer = window.setTimeout(() => {
+      setSheetConfig(previous => ({ ...previous, isOpen: false }));
+      setHasScannedCode(false);
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [sheetConfig.isOpen, hasScannedCode]);
+
+  const dismissScanResult = () => {
+    setSheetConfig(previous => ({ ...previous, isOpen: false }));
+    setHasScannedCode(false);
+  };
 
   const applyCoordinates = useCallback((lat: number, lng: number, acc = 8) => {
     const coords = { latitude: lat, longitude: lng, accuracy: acc };
@@ -218,7 +232,7 @@ export const ScannerView: React.FC = () => {
         });
       }
     }
-  }, [hasScannedCode, sessions, activeSession, attendanceRecords, currentUser?.id, studentCoords, checkInStudent, checkOutStudent, navigate]);
+  }, [hasScannedCode, sessions, attendanceRecords, currentUser?.id, studentCoords, checkInStudent, checkOutStudent, navigate]);
 
   // Start Camera stream with resilient multi-level fallbacks
   const startCamera = useCallback(async () => {
@@ -479,7 +493,7 @@ export const ScannerView: React.FC = () => {
             Scan QR Code
           </h1>
           <span style={{ fontSize: '11px', color: '#93C5FD', fontWeight: 600 }}>
-            {activeSession ? `${activeSession.courseCode} • ${activeSession.room}` : 'Check In'}
+            {activeSession ? `${activeSession.courseCode} • ${activeSession.room}` : 'General Attendance Scanner'}
           </span>
         </div>
 
@@ -562,7 +576,7 @@ export const ScannerView: React.FC = () => {
             <Camera size={14} />
             <span>Live Camera</span>
           </button>
-          <button
+          {activeSession && <button
             onClick={() => setActiveTab('pin')}
             style={{
               display: 'inline-flex',
@@ -580,7 +594,7 @@ export const ScannerView: React.FC = () => {
           >
             <KeyRound size={14} />
             <span>Enter PIN</span>
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -964,7 +978,7 @@ export const ScannerView: React.FC = () => {
       {/* Confirmation Bottom Sheet */}
       <ConfirmationSheet
         isOpen={sheetConfig.isOpen}
-        onClose={() => setSheetConfig(prev => ({ ...prev, isOpen: false }))}
+        onClose={dismissScanResult}
         type={sheetConfig.type}
         title={sheetConfig.title}
         message={sheetConfig.message}

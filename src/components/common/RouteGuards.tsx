@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { SplashScreen } from './SplashScreen';
 import type { UserRole } from '../../types';
 
 interface RequireRoleProps {
@@ -18,14 +19,7 @@ export const RequireRole: React.FC<RequireRoleProps> = ({ role, children }) => {
   const location = useLocation();
 
   if (authLoading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-brand-50)' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ width: '32px', height: '32px', border: '3px solid var(--color-brand-200)', borderTopColor: 'var(--color-brand-600)', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
-          <div style={{ fontSize: '13px', color: 'var(--color-ink-500)', fontWeight: 500 }}>Connecting to LabAttend...</div>
-        </div>
-      </div>
-    );
+    return <SplashScreen message="Verifying academic credentials..." />;
   }
 
   if (!currentUser) {
