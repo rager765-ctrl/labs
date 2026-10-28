@@ -53,6 +53,7 @@ import {
   notifyCorrectionDecision,
   notifyCoordinatorAttendeeEvent,
   setupForegroundNotificationListener,
+  triggerSystemNotification,
   pingBackendHealth,
 } from '../services/fcmClientService';
 import type { AttendanceLocation } from '../types';
@@ -211,8 +212,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsCloudConnected(true);
     setCloudAttendanceReady({ sessions: false, attendance: false });
 
+    // Track initial syncs to avoid firing duplicate alerts on first load
+    let initialSessionsSync = true;
+    let initialAttendanceSync = true;
+    let initialCorrectionsSync = true;
+
     // 1. Live meeting sessions
     const unsubSessions = subscribeToSessions((cloudSessions: LabSession[]) => {
+      if (!initialSessionsSync) {
+        // Detect session transitioning to live
+        cloudSessions.forEach(sess => {
+          const prev = state.sessions.find(s => s.id === sess.id);
+          if (sess.status === 'live' && prev?.status !== 'live' && state.currentUser?.role === 'student') {
+            triggerSystemNotification(
+              `🔴 Meeting Live: ${sess.title}`,
+              `Check-in is now open at ${sess.room || 'the lab'}. Tap to verify attendance.`,
+              `/student/sessions/${sess.id}`
+            );
+          }
+        });
+      }
+      initialSessionsSync = false;
       setState(prev => ({ ...prev, sessions: cloudSessions }));
       setCloudAttendanceReady(prev => ({ ...prev, sessions: true }));
     });
@@ -225,6 +245,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 3. Live Attendance (scoped to studentId for students, global for coordinators)
     const unsubAttendance = subscribeToAttendance(
       (cloudAttendance: AttendanceRecord[]) => {
+        if (!initialAttendanceSync && state.currentUser?.role === 'coordinator') {
+          // Detect new check-ins or check-outs
+          const existingIds = new Set(state.attendanceRecords.map(r => r.id));
+          cloudAttendance.forEach(rec => {
+            if (!existingIds.has(rec.id) && (rec.status === 'present' || rec.status === 'late')) {
+              const studentName = state.students.find(s => s.id === rec.studentId)?.name || 'Attendee';
+              const sessTitle = state.sessions.find(s => s.id === rec.sessionId)?.title || 'Meeting';
+              triggerSystemNotification(
+                `🟢 Attendee Checked In: ${studentName}`,
+                `${studentName} checked in as ${rec.status.toUpperCase()} for "${sessTitle}".`,
+                `/coordinator/sessions/${rec.sessionId}`
+              );
+            }
+          });
+        }
+        initialAttendanceSync = false;
         setState(prev => ({ ...prev, attendanceRecords: cloudAttendance }));
         setCloudAttendanceReady(prev => ({ ...prev, attendance: true }));
       },
@@ -235,6 +271,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 4. Live Corrections (scoped to studentId for students, global for coordinators)
     const unsubCorrections = subscribeToCorrections(
       (cloudCorrections: CorrectionRequest[]) => {
+        if (!initialCorrectionsSync) {
+          if (state.currentUser?.role === 'coordinator') {
+            const existingCorrIds = new Set(state.corrections.map(c => c.id));
+            cloudCorrections.forEach(corr => {
+              if (!existingCorrIds.has(corr.id) && corr.status === 'pending') {
+                const studentName = state.students.find(s => s.id === corr.studentId)?.name || 'Attendee';
+                triggerSystemNotification(
+                  `⚖️ New Issue Request: ${studentName}`,
+                  `${studentName} submitted an attendance correction for coordinator review.`,
+                  '/coordinator'
+                );
+              }
+            });
+          } else if (state.currentUser?.role === 'student') {
+            cloudCorrections.forEach(corr => {
+              const prevCorr = state.corrections.find(c => c.id === corr.id);
+              if (corr.studentId === state.currentUser?.id && corr.status !== 'pending' && prevCorr?.status === 'pending') {
+                triggerSystemNotification(
+                  `Correction ${corr.status === 'approved' ? 'Approved ✅' : corr.status === 'resolved' ? 'Resolved ✅' : 'Rejected ❌'}`,
+                  `Your attendance correction was ${corr.status}.`,
+                  '/student/history'
+                );
+              }
+            });
+          }
+        }
+        initialCorrectionsSync = false;
         setState(prev => ({ ...prev, corrections: cloudCorrections }));
       },
       state.currentUser?.role,
@@ -247,15 +310,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubAttendance();
       unsubCorrections();
     };
-  }, [firebaseUser, state.currentUser?.role, state.currentUser?.id]);
+  }, [firebaseUser, state.currentUser?.role, state.currentUser?.id, state.sessions, state.attendanceRecords, state.corrections, state.students]);
 
-  // Listen for foreground push notifications and display notification toast
+  // Listen for foreground push notifications and display notification toast + native OS notification
   useEffect(() => {
     let unsubPromise: Promise<(() => void) | null> | null = null;
     unsubPromise = setupForegroundNotificationListener(payload => {
-      if (payload.title) {
-        addToast(payload.body || 'New session or attendance update.', 'info', payload.title);
-      }
+      const title = payload.title || 'Innovations Lab Attendance';
+      const body = payload.body || 'New session or attendance update.';
+
+      addToast(body, 'info', title);
+      triggerSystemNotification(title, body, payload.data?.click_action || payload.data?.url);
     });
 
     return () => {

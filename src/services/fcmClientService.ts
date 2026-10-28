@@ -268,6 +268,36 @@ export async function sendTestPushAlert(uid: string): Promise<boolean> {
 }
 
 /**
+ * Directly triggers a native OS desktop/system notification outside the browser window
+ */
+export function triggerSystemNotification(title: string, body: string, url?: string): void {
+  if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
+    return;
+  }
+
+  try {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.showNotification(title, {
+          body,
+          icon: '/favicon.svg',
+          badge: '/favicon.svg',
+          tag: 'attendance-' + Date.now(),
+          data: { url: url || '/' },
+          requireInteraction: true,
+        });
+      }).catch(() => {
+        new Notification(title, { body, icon: '/favicon.svg' });
+      });
+    } else {
+      new Notification(title, { body, icon: '/favicon.svg' });
+    }
+  } catch (err) {
+    console.warn('Could not display system notification:', err);
+  }
+}
+
+/**
  * Sets up foreground FCM push listener
  */
 export async function setupForegroundNotificationListener(

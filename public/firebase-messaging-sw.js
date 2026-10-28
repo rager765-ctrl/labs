@@ -12,7 +12,7 @@ firebase.initializeApp({
   appId: "1:84609395922:web:140353f3a9a66c1aa5510b",
 });
 
-// Retrieve an instance of Firebase Messaging so that it can handle background messages.
+// Retrieve an instance of Firebase Messaging
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
@@ -26,15 +26,43 @@ messaging.onBackgroundMessage((payload) => {
     tag: payload.data?.sessionId || 'attendance-notification',
     data: payload.data || {},
     vibrate: [200, 100, 200],
+    requireInteraction: true,
   };
 
   self.registration.showNotification(title, options);
 });
 
+// Generic WebPush push event handler ensuring outside-app OS notification banners
+self.addEventListener('push', (event) => {
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch {
+      data = { body: event.data.text() };
+    }
+  }
+
+  const title = data.notification?.title || data.data?.title || data.title || 'Innovations Lab Attendance';
+  const body = data.notification?.body || data.data?.body || data.body || 'New session or attendance update.';
+
+  const options = {
+    body,
+    icon: '/favicon.svg',
+    badge: '/favicon.svg',
+    tag: data.data?.sessionId || 'attendance-' + Date.now(),
+    data: data.data || data,
+    vibrate: [200, 100, 200],
+    requireInteraction: true,
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
 // Handle notification click to navigate to the relevant session or history page
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.click_action || event.notification.data?.targetUrl || '/';
+  const targetUrl = event.notification.data?.click_action || event.notification.data?.url || event.notification.data?.targetUrl || '/';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
