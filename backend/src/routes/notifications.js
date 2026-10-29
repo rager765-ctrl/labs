@@ -33,8 +33,9 @@ function requireFirebase(req, res, next) {
 
 /**
  * Helper to construct standard WebPush options with high urgency and OS banners
+ * Uses deterministic tag so duplicate dispatches collapse into a single notification.
  */
-function buildWebPushConfig(title, body, url = '/') {
+function buildWebPushConfig(title, body, url = '/', customTag = null) {
   return {
     headers: {
       Urgency: 'high',
@@ -46,13 +47,75 @@ function buildWebPushConfig(title, body, url = '/') {
       icon: '/icon-192.png',
       badge: '/badge.png',
       requireInteraction: true,
-      tag: 'attendance-' + Date.now(),
-      renotify: true,
+      tag: customTag || 'lab-alert',
+      renotify: false,
     },
     fcmOptions: {
       link: url,
     },
   };
+}
+
+/**
+ * Helper to prune unregistered or invalid tokens across Firestore
+ */
+async function pruneFailedTokens(tokens, responses, specificUid = null) {
+  if (!db || !Array.isArray(tokens) || !Array.isArray(responses)) return;
+  const badTokens = [];
+  responses.forEach((resp, idx) => {
+    if (!resp.success) {
+      const code = resp.error?.code || '';
+      if (
+        code === 'messaging/invalid-registration-token' ||
+        code === 'messaging/registration-token-not-registered'
+      ) {
+        if (tokens[idx]) badTokens.push(tokens[idx]);
+      }
+    }
+  });
+
+  if (badTokens.length === 0) return;
+
+  try {
+    if (specificUid) {
+      const userRef = db.collection('users').doc(specificUid);
+      const userSnap = await userRef.get();
+      if (userSnap.exists) {
+        const data = userSnap.data();
+        const devices = { ...(data.devices || {}) };
+        for (const [k, d] of Object.entries(devices)) {
+          if (badTokens.includes(d?.token)) {
+            delete devices[k];
+          }
+        }
+        await userRef.update({
+          devices,
+          fcmTokens: admin.firestore.FieldValue.arrayRemove(...badTokens),
+        });
+      }
+      addLog('info', `Pruned ${badTokens.length} dead token(s) for user ${specificUid}`);
+    } else {
+      for (const badToken of badTokens) {
+        const snap = await db.collection('users').where('fcmTokens', 'array-contains', badToken).get();
+        const batch = db.batch();
+        snap.forEach(docSnap => {
+          const d = docSnap.data();
+          const devs = { ...(d.devices || {}) };
+          for (const [k, dev] of Object.entries(devs)) {
+            if (dev?.token === badToken) delete devs[k];
+          }
+          batch.update(docSnap.ref, {
+            devices: devs,
+            fcmTokens: admin.firestore.FieldValue.arrayRemove(badToken),
+          });
+        });
+        await batch.commit();
+      }
+      addLog('info', `Pruned ${badTokens.length} dead token(s) across database`);
+    }
+  } catch (err) {
+    console.warn('Error during token pruning:', err.message);
+  }
 }
 
 const ANDROID_PUSH_CONFIG = {
@@ -183,11 +246,13 @@ router.post('/test-email', async (req, res) => {
 
 /**
  * POST /api/notifications/register-token
- * Saves an FCM device token for a student or coordinator in Firestore and subscribes to topic
+ * Saves an FCM device token for a student or coordinator in Firestore,
+ * keeping a clean per-device dictionary so multi-device logins are supported
+ * without accumulating duplicate tokens on the same device.
  */
 router.post('/register-token', requireFirebase, async (req, res) => {
   try {
-    const { uid, token, deviceName = 'Web Browser', role = 'student' } = req.body;
+    const { uid, token, deviceId, deviceName = 'Web Browser', role = 'student' } = req.body;
 
     if (!uid || !token) {
       addLog('fail', 'Token registration rejected: missing uid or token in body.');
@@ -197,11 +262,70 @@ router.post('/register-token', requireFirebase, async (req, res) => {
       });
     }
 
+    const devKey = (deviceId && typeof deviceId === 'string' && deviceId.trim())
+      ? deviceId.replace(/[^a-zA-Z0-9_-]/g, '_')
+      : 'device_' + token.slice(-12).replace(/[^a-zA-Z0-9_-]/g, '_');
+
     if (db) {
+      // 1. Disassociate this token from any OTHER user doc so accounts do not share tokens
+      try {
+        const existingUsersSnap = await db.collection('users').where('fcmTokens', 'array-contains', token).get();
+        if (!existingUsersSnap.empty) {
+          const cleanBatch = db.batch();
+          let cleanedOtherUsers = 0;
+          existingUsersSnap.forEach(docSnap => {
+            if (docSnap.id !== uid) {
+              const otherData = docSnap.data();
+              const otherDevices = { ...(otherData.devices || {}) };
+              for (const [dk, dev] of Object.entries(otherDevices)) {
+                if (dev?.token === token) delete otherDevices[dk];
+              }
+              cleanBatch.update(docSnap.ref, {
+                devices: otherDevices,
+                fcmTokens: admin.firestore.FieldValue.arrayRemove(token),
+              });
+              cleanedOtherUsers++;
+            }
+          });
+          if (cleanedOtherUsers > 0) {
+            await cleanBatch.commit();
+            addLog('info', `Disassociated token from ${cleanedOtherUsers} previous account(s).`);
+          }
+        }
+      } catch (cleanErr) {
+        console.warn('Could not disassociate token from other accounts:', cleanErr.message);
+      }
+
+      // 2. Fetch current user document to manage per-device tokens
       const userRef = db.collection('users').doc(uid);
+      const userSnap = await userRef.get();
+      const existingData = userSnap.exists ? userSnap.data() : {};
+      const existingDevices = { ...(existingData.devices || {}) };
+
+      // Remove any prior entry using this token under another key
+      for (const [k, d] of Object.entries(existingDevices)) {
+        if (d?.token === token && k !== devKey) {
+          delete existingDevices[k];
+        }
+      }
+
+      existingDevices[devKey] = {
+        token,
+        deviceName: deviceName || 'Web Browser',
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Deduplicate tokens from all registered active devices
+      const distinctTokens = Array.from(new Set(
+        Object.values(existingDevices)
+          .map(d => d?.token)
+          .filter(t => typeof t === 'string' && t.length > 10)
+      ));
+
       await userRef.set(
         {
-          fcmTokens: admin.firestore.FieldValue.arrayUnion(token),
+          devices: existingDevices,
+          fcmTokens: distinctTokens,
           role,
           notificationsEnabled: true,
           lastActiveAt: new Date().toISOString(),
@@ -226,10 +350,11 @@ router.post('/register-token', requireFirebase, async (req, res) => {
       }
     }
 
-    addLog('subscribe', `${role === 'coordinator' ? 'Coordinator' : 'User'} registered FCM token (UID: ${uid}, Device: "${deviceName}")`, {
+    addLog('subscribe', `${role === 'coordinator' ? 'Coordinator' : 'User'} registered FCM token (UID: ${uid}, Device: "${deviceName}", DeviceId: "${devKey}")`, {
       uid,
       role,
       deviceName,
+      deviceId: devKey,
       tokenPreview: `${token.slice(0, 16)}...`,
     });
 
@@ -335,13 +460,14 @@ router.post('/coordinator-alert', async (req, res) => {
 
     // 2. Send FCM if enabled
     if (sendFcm && messaging) {
+      const tag = sessionId ? (`coord-${type || 'alert'}-${sessionId}`) : (`coord-${type || 'alert'}`);
       if (coordTokens.length > 0) {
         const uniqueCoords = Array.from(new Set(coordTokens));
         const response = await messaging.sendEachForMulticast({
           tokens: uniqueCoords,
           notification: { title, body },
           data: { type: type || 'coordinator_alert', sessionId: sessionId || '', url },
-          webpush: buildWebPushConfig(title, body, url),
+          webpush: buildWebPushConfig(title, body, url, tag),
           android: ANDROID_PUSH_CONFIG,
         });
 
@@ -363,6 +489,7 @@ router.post('/coordinator-alert', async (req, res) => {
             type,
             failureCount: response.failureCount,
           });
+          await pruneFailedTokens(uniqueCoords, response.responses);
         }
       } else {
         // Fallback: Send to 'coordinators' topic
@@ -372,7 +499,7 @@ router.post('/coordinator-alert', async (req, res) => {
             topic,
             notification: { title, body },
             data: { type: type || 'coordinator_alert', sessionId: sessionId || '', url },
-            webpush: buildWebPushConfig(title, body, url),
+            webpush: buildWebPushConfig(title, body, url, tag),
             android: ANDROID_PUSH_CONFIG,
           });
           deliveryResults.fcm = { success: true, mode: 'topic_coordinators', messageId: response };
@@ -397,11 +524,11 @@ router.post('/coordinator-alert', async (req, res) => {
 
 /**
  * POST /api/notifications/unsubscribe-token
- * Removes an FCM device token from a user's profile
+ * Removes an FCM device token from a user's profile while preserving other active devices
  */
 router.post('/unsubscribe-token', async (req, res) => {
   try {
-    const { uid, token } = req.body;
+    const { uid, token, deviceId } = req.body;
 
     if (!uid || !token) {
       return res.status(400).json({ success: false, error: 'Both "uid" and "token" are required.' });
@@ -409,14 +536,43 @@ router.post('/unsubscribe-token', async (req, res) => {
 
     if (db) {
       const userRef = db.collection('users').doc(uid);
-      await userRef.update({
-        fcmTokens: admin.firestore.FieldValue.arrayRemove(token),
-      });
+      const userSnap = await userRef.get();
+      if (userSnap.exists) {
+        const userData = userSnap.data();
+        const devices = { ...(userData.devices || {}) };
+
+        if (deviceId && devices[deviceId]) {
+          delete devices[deviceId];
+        } else {
+          for (const [k, d] of Object.entries(devices)) {
+            if (d?.token === token) delete devices[k];
+          }
+        }
+
+        const remainingTokens = Array.from(new Set(
+          Object.values(devices)
+            .map(d => d?.token)
+            .filter(t => t && t !== token)
+        ));
+
+        const updates = {
+          devices,
+          fcmTokens: remainingTokens,
+        };
+
+        // Only disable notifications if 0 devices remain for this user
+        if (remainingTokens.length === 0) {
+          updates.notificationsEnabled = false;
+        }
+
+        await userRef.update(updates);
+      }
     }
 
     if (messaging) {
       try {
         await messaging.unsubscribeFromTopic([token], 'all-students');
+        await messaging.unsubscribeFromTopic([token], 'coordinators');
       } catch {}
     }
 
@@ -454,6 +610,7 @@ router.post('/send-to-token', requireFirebase, async (req, res) => {
       url,
     });
 
+    const directTag = data.tag || 'direct-alert';
     const message = {
       token,
       notification: {
@@ -465,7 +622,7 @@ router.post('/send-to-token', requireFirebase, async (req, res) => {
         click_action: url,
         timestamp: new Date().toISOString(),
       },
-      webpush: buildWebPushConfig(title, body, url),
+      webpush: buildWebPushConfig(title, body, url, directTag),
       android: ANDROID_PUSH_CONFIG,
     };
 
@@ -520,9 +677,10 @@ router.post('/send-to-user', requireFirebase, async (req, res) => {
     }
 
     const userData = userDoc.data();
-    const tokens = userData.fcmTokens || [];
+    const rawTokens = userData.fcmTokens || [];
+    const tokens = Array.from(new Set(Array.isArray(rawTokens) ? rawTokens.filter(Boolean) : []));
 
-    if (!Array.isArray(tokens) || tokens.length === 0) {
+    if (tokens.length === 0) {
       addLog('info', `Send to user: UID "${uid}" has 0 active FCM tokens.`, { uid });
       return res.status(200).json({
         success: false,
@@ -537,6 +695,7 @@ router.post('/send-to-user', requireFirebase, async (req, res) => {
       title,
     });
 
+    const userTag = data.tag || ('user-alert-' + uid);
     const multicastMessage = {
       tokens,
       notification: {
@@ -547,7 +706,7 @@ router.post('/send-to-user', requireFirebase, async (req, res) => {
         ...data,
         click_action: url,
       },
-      webpush: buildWebPushConfig(title, body, url),
+      webpush: buildWebPushConfig(title, body, url, userTag),
       android: ANDROID_PUSH_CONFIG,
     };
 
@@ -562,7 +721,6 @@ router.post('/send-to-user', requireFirebase, async (req, res) => {
 
     // Clean up expired or invalid tokens and log exact failure reasons
     if (response.failureCount > 0) {
-      const failedTokens = [];
       const failDetails = [];
 
       response.responses.forEach((resp, idx) => {
@@ -570,15 +728,7 @@ router.post('/send-to-user', requireFirebase, async (req, res) => {
           const errCode = resp.error?.code || 'UNKNOWN';
           const errMsg = resp.error?.message || 'Push delivery failed';
           const tokPreview = `${tokens[idx]?.slice(0, 16)}...`;
-
           failDetails.push({ tokenPreview: tokPreview, code: errCode, message: errMsg });
-
-          if (
-            errCode === 'messaging/invalid-registration-token' ||
-            errCode === 'messaging/registration-token-not-registered'
-          ) {
-            failedTokens.push(tokens[idx]);
-          }
         }
       });
 
@@ -588,12 +738,7 @@ router.post('/send-to-user', requireFirebase, async (req, res) => {
         failures: failDetails,
       });
 
-      if (failedTokens.length > 0) {
-        await db.collection('users').doc(uid).update({
-          fcmTokens: admin.firestore.FieldValue.arrayRemove(...failedTokens),
-        });
-        addLog('info', `Pruned ${failedTokens.length} expired/invalid FCM token(s) for user ${uid}.`);
-      }
+      await pruneFailedTokens(tokens, response.responses, uid);
     }
 
     return res.json({
@@ -714,6 +859,7 @@ router.post('/session-alert', async (req, res) => {
 
     // 2. Dispatch FCM Push if enabled
     if (sendFcm && messaging) {
+      const sessionTag = 'session-' + sessionId;
       const uniqueTokens = Array.from(new Set(tokenList));
       if (uniqueTokens.length > 0) {
         try {
@@ -721,7 +867,7 @@ router.post('/session-alert', async (req, res) => {
             tokens: uniqueTokens,
             notification: { title, body },
             data: { sessionId, targetUrl },
-            webpush: buildWebPushConfig(title, body, targetUrl),
+            webpush: buildWebPushConfig(title, body, targetUrl, sessionTag),
             android: ANDROID_PUSH_CONFIG,
           });
 
@@ -743,6 +889,7 @@ router.post('/session-alert', async (req, res) => {
               sessionId,
               failureCount: response.failureCount,
             });
+            await pruneFailedTokens(uniqueTokens, response.responses);
           }
         } catch (fcmErr) {
           deliveryResults.fcm = { success: false, error: fcmErr.message };
@@ -755,7 +902,7 @@ router.post('/session-alert', async (req, res) => {
             topic,
             notification: { title, body },
             data: { sessionId, targetUrl },
-            webpush: buildWebPushConfig(title, body, targetUrl),
+            webpush: buildWebPushConfig(title, body, targetUrl, sessionTag),
             android: ANDROID_PUSH_CONFIG,
           });
           deliveryResults.fcm = { success: true, mode: 'topic', messageId: response };
@@ -877,7 +1024,7 @@ router.post('/correction-alert', async (req, res) => {
           tokens: uniqueTokens,
           notification: { title, body },
           data: { type: 'correction_update', status },
-          webpush: buildWebPushConfig(title, body, '/student/history'),
+          webpush: buildWebPushConfig(title, body, '/student/history', 'correction-' + studentId),
           android: ANDROID_PUSH_CONFIG,
         });
 
@@ -911,6 +1058,7 @@ router.post('/correction-alert', async (req, res) => {
             failureCount: response.failureCount,
             failures,
           });
+          await pruneFailedTokens(uniqueTokens, response.responses, studentId);
         }
       }
     }
@@ -986,6 +1134,52 @@ router.post('/unsubscribe-topic', requireFirebase, async (req, res) => {
   } catch (error) {
     addLog('fail', `Topic unsubscription error: ${error.message}`);
     console.error('Error unsubscribing from topic:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/notifications/cleanup-duplicates
+ * Cleans up duplicated and stale FCM tokens across all user profiles in Firestore
+ */
+router.post('/cleanup-duplicates', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Firestore database not connected' });
+    }
+
+    const usersSnap = await db.collection('users').get();
+    let cleanedUsersCount = 0;
+    let prunedTokensCount = 0;
+
+    for (const docSnap of usersSnap.docs) {
+      const data = docSnap.data();
+      const rawTokens = Array.isArray(data.fcmTokens) ? data.fcmTokens : [];
+      const devices = data.devices || {};
+
+      const uniqueTokens = Array.from(new Set(rawTokens.filter(t => typeof t === 'string' && t.length > 10)));
+
+      // If duplicates existed in fcmTokens or count differs
+      if (rawTokens.length !== uniqueTokens.length) {
+        prunedTokensCount += (rawTokens.length - uniqueTokens.length);
+        cleanedUsersCount++;
+
+        await docSnap.ref.update({
+          fcmTokens: uniqueTokens,
+        });
+      }
+    }
+
+    addLog('info', `Cleanup completed: Deduplicated ${prunedTokensCount} duplicate token(s) across ${cleanedUsersCount} user(s).`);
+
+    return res.json({
+      success: true,
+      message: `Cleaned up ${prunedTokensCount} duplicate tokens across ${cleanedUsersCount} users.`,
+      cleanedUsersCount,
+      prunedTokensCount,
+    });
+  } catch (error) {
+    addLog('fail', `Token cleanup error: ${error.message}`);
     return res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -34,7 +34,7 @@ function showBackgroundNotification(payload) {
 
   const title = notification.title || data.title || payload.title || 'Innovations Lab Attendance';
   const body = notification.body || data.body || payload.body || 'New session or attendance update.';
-  const tag = data.sessionId || data.tag || notification.tag || 'attendance-' + Date.now();
+  const tag = data.sessionId ? ('session-' + data.sessionId) : (data.tag || notification.tag || data.type || 'lab-alert');
   const targetUrl = data.click_action || data.url || data.targetUrl || notification.click_action || '/';
 
   const options = {

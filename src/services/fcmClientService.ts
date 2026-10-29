@@ -1,11 +1,24 @@
 import { getToken, onMessage } from 'firebase/messaging';
-import { doc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, arrayUnion, arrayRemove, deleteField } from 'firebase/firestore';
 import { initMessaging, db } from './firebase';
 import type { LabSession } from '../types';
 
 export const BACKEND_URL_STORAGE_KEY = 'attendance_backend_api_url';
 export const FCM_SUBSCRIBED_KEY = 'attendance_fcm_subscribed';
 export const FCM_TOKEN_STORAGE_KEY = 'attendance_fcm_token';
+export const FCM_DEVICE_ID_KEY = 'attendance_fcm_device_id';
+
+/**
+ * Returns a stable unique ID for this browser / physical device
+ */
+export function getOrCreateDeviceId(): string {
+  let deviceId = localStorage.getItem(FCM_DEVICE_ID_KEY);
+  if (!deviceId) {
+    deviceId = 'dev_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+    localStorage.setItem(FCM_DEVICE_ID_KEY, deviceId);
+  }
+  return deviceId;
+}
 
 /**
  * Returns the configured backend API URL for Render or local development
@@ -70,7 +83,6 @@ export async function requestAndSubscribePush(uid: string, role?: string): Promi
     });
 
     // Retrieve FCM device token
-    // Optional VAPID key if configured in .env: VITE_FIREBASE_VAPID_KEY
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || undefined;
     const currentToken = await getToken(messaging, {
       serviceWorkerRegistration: swRegistration,
@@ -81,11 +93,21 @@ export async function requestAndSubscribePush(uid: string, role?: string): Promi
       return { success: false, error: 'Unable to retrieve FCM registration token from Firebase.' };
     }
 
-    // 1. Store token in user's Firestore document
+    const deviceId = getOrCreateDeviceId();
+    const deviceName = `${navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop'} (${navigator.platform || 'Browser'})`;
+
+    // 1. Store token under the specific device entry in user's Firestore document
     if (db && uid) {
       try {
         const userRef = doc(db, 'users', uid);
         await setDoc(userRef, {
+          devices: {
+            [deviceId]: {
+              token: currentToken,
+              deviceName,
+              updatedAt: new Date().toISOString(),
+            },
+          },
           fcmTokens: arrayUnion(currentToken),
           role: role || 'student',
           notificationsEnabled: true,
@@ -98,6 +120,7 @@ export async function requestAndSubscribePush(uid: string, role?: string): Promi
         await setDoc(tokenDocRef, {
           token: currentToken,
           uid,
+          deviceId,
           role: role || 'student',
           createdAt: new Date().toISOString(),
         }, { merge: true }).catch(() => {});
@@ -115,8 +138,9 @@ export async function requestAndSubscribePush(uid: string, role?: string): Promi
         body: JSON.stringify({
           uid,
           token: currentToken,
+          deviceId,
           role: role || 'student',
-          deviceName: navigator.userAgent.slice(0, 80),
+          deviceName,
         }),
       });
       if (!res.ok) {
@@ -135,8 +159,9 @@ export async function requestAndSubscribePush(uid: string, role?: string): Promi
       try {
         swRegistration.showNotification('Notifications Enabled ✅', {
           body: 'You will now receive instant alerts for live meetings, sessions, and correction updates.',
-          icon: '/favicon.svg',
-          badge: '/favicon.svg',
+          icon: '/icon-192.png',
+          badge: '/badge.png',
+          tag: 'fcm-welcome',
         });
       } catch {
         // Fallback or ignore
@@ -151,22 +176,36 @@ export async function requestAndSubscribePush(uid: string, role?: string): Promi
 }
 
 /**
- * Unsubscribes from push notifications and removes the token
+ * Unsubscribes this specific device from push notifications without disabling other devices
  */
 export async function unsubscribePush(uid: string): Promise<{ success: boolean; error?: string }> {
   try {
     const token = localStorage.getItem(FCM_TOKEN_STORAGE_KEY);
+    const deviceId = localStorage.getItem(FCM_DEVICE_ID_KEY);
+
     if (db && uid && token) {
       try {
         const userRef = doc(db, 'users', uid);
-        await updateDoc(userRef, {
+        const updatePayload: any = {
           fcmTokens: arrayRemove(token),
-          notificationsEnabled: false,
-        });
+        };
+        if (deviceId) {
+          updatePayload[`devices.${deviceId}`] = deleteField();
+        }
+        await updateDoc(userRef, updatePayload);
       } catch (err) {
         console.warn('Could not remove FCM token from Firestore:', err);
       }
     }
+
+    try {
+      const backendUrl = getBackendBaseUrl();
+      await fetch(`${backendUrl}/api/notifications/unsubscribe-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid, token, deviceId }),
+      });
+    } catch {}
 
     localStorage.removeItem(FCM_SUBSCRIBED_KEY);
     localStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
@@ -258,26 +297,12 @@ export async function notifyCoordinatorAttendeeEvent(params: {
  * Sends a test push notification to verify the pipeline
  */
 export async function sendTestPushAlert(uid: string): Promise<boolean> {
-  const success = await sendBackendNotification('send-to-user', {
+  return await sendBackendNotification('send-to-user', {
     uid,
     title: '🔔 Test Notification from Innovations Lab',
     body: 'FCM push notifications are configured and functioning on this device!',
     url: '/student',
   });
-
-  // Local fallback notification if backend is sleeping on Render free tier
-  if (Notification.permission === 'granted') {
-    try {
-      new Notification('🔔 Test Alert (Innovations Lab)', {
-        body: 'FCM push pipeline verified on your browser!',
-        icon: '/favicon.svg',
-      });
-    } catch {
-      // Ignored
-    }
-  }
-
-  return success;
 }
 
 /**

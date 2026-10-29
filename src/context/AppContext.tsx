@@ -326,7 +326,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const body = payload.body || 'New session or attendance update.';
 
       addToast(body, 'info', title);
-      triggerSystemNotification(title, body, payload.data?.click_action || payload.data?.url);
     });
 
     return () => {
