@@ -5,7 +5,6 @@ import {
   BellOff,
   Check,
   RefreshCw,
-  Send,
   Activity,
   AlertTriangle,
   Radio,
@@ -16,7 +15,6 @@ import {
   unsubscribePush,
   getNotificationPermission,
   isPushNotificationSupported,
-  sendTestPushAlert,
   FCM_SUBSCRIBED_KEY,
   FCM_TOKEN_STORAGE_KEY,
 } from '../../services/fcmClientService';
@@ -31,7 +29,6 @@ export const CoordinatorFcmBanner: React.FC = () => {
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>('default');
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
-  const [testingPush, setTestingPush] = useState<boolean>(false);
   const [showLogsModal, setShowLogsModal] = useState<boolean>(false);
 
   useEffect(() => {
@@ -96,23 +93,6 @@ export const CoordinatorFcmBanner: React.FC = () => {
     }
   };
 
-  const handleTestAlert = async () => {
-    if (!uid) {
-      addToast('Sign in required to dispatch test alert.', 'info');
-      return;
-    }
-
-    setTestingPush(true);
-    try {
-      await sendTestPushAlert(uid);
-      addToast('Test coordinator alert dispatched to your device.', 'success', 'Test Alert Sent');
-    } catch (err: any) {
-      addToast(err?.message || 'Failed to send test alert.', 'error');
-    } finally {
-      setTestingPush(false);
-    }
-  };
-
   return (
     <>
       <section
@@ -151,7 +131,7 @@ export const CoordinatorFcmBanner: React.FC = () => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <h2 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--color-ink-900)' }}>
-                  Coordinator Push Notifications (FCM)
+                  Coordinator Push Notifications
                 </h2>
                 {permission === 'denied' ? (
                   <span
@@ -227,32 +207,18 @@ export const CoordinatorFcmBanner: React.FC = () => {
               ) : (
                 <Bell size={14} />
               )}
-              <span>{loading ? 'Updating...' : isSubscribed ? 'FCM Alerts On' : 'Enable Live Alerts'}</span>
+              <span>{loading ? 'Updating...' : isSubscribed ? 'Alerts Active' : 'Enable Live Alerts'}</span>
             </button>
-
-            {isSubscribed && (
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={handleTestAlert}
-                disabled={testingPush}
-                style={{ height: '36px', fontSize: '12px', gap: '6px' }}
-                title="Send test push to this coordinator device"
-              >
-                {testingPush ? <RefreshCw size={13} className="spin" /> : <Send size={13} />}
-                <span>Test Alert</span>
-              </button>
-            )}
 
             <button
               type="button"
               className="btn-secondary"
               onClick={() => setShowLogsModal(true)}
               style={{ height: '36px', fontSize: '12px', gap: '6px' }}
-              title="Inspect live FCM push logs and server keep-alive status"
+              title="Inspect recent notification activity and delivery status"
             >
               <Activity size={13} color="var(--color-brand-600)" />
-              <span>FCM Logs</span>
+              <span>Activity Logs</span>
             </button>
           </div>
         </div>

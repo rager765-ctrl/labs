@@ -203,7 +203,7 @@ export const StudentProfile: React.FC = () => {
 
         <ThemeToggle />
 
-        {/* Real FCM Push Notifications Configuration */}
+        {/* Push Notification Settings */}
         <PushNotificationSettings />
 
         {/* Account & Session Section */}

@@ -252,7 +252,7 @@ router.post('/test-email', async (req, res) => {
  */
 router.post('/register-token', requireFirebase, async (req, res) => {
   try {
-    const { uid, token, deviceId, deviceName = 'Web Browser', role = 'student' } = req.body;
+    const { uid, token, deviceId, deviceName = 'Web Browser', role } = req.body;
 
     if (!uid || !token) {
       addLog('fail', 'Token registration rejected: missing uid or token in body.');
@@ -265,6 +265,8 @@ router.post('/register-token', requireFirebase, async (req, res) => {
     const devKey = (deviceId && typeof deviceId === 'string' && deviceId.trim())
       ? deviceId.replace(/[^a-zA-Z0-9_-]/g, '_')
       : 'device_' + token.slice(-12).replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    let finalRole = role || 'student';
 
     if (db) {
       // 1. Disassociate this token from any OTHER user doc so accounts do not share tokens
@@ -296,11 +298,16 @@ router.post('/register-token', requireFirebase, async (req, res) => {
         console.warn('Could not disassociate token from other accounts:', cleanErr.message);
       }
 
-      // 2. Fetch current user document to manage per-device tokens
+      // 2. Fetch current user document to manage per-device tokens and preserve role
       const userRef = db.collection('users').doc(uid);
       const userSnap = await userRef.get();
       const existingData = userSnap.exists ? userSnap.data() : {};
       const existingDevices = { ...(existingData.devices || {}) };
+
+      // Determine final role: NEVER demote a coordinator to student if role was not explicitly sent
+      finalRole = (role && (role === 'coordinator' || role === 'student'))
+        ? role
+        : (existingData.role || 'student');
 
       // Remove any prior entry using this token under another key
       for (const [k, d] of Object.entries(existingDevices)) {
@@ -326,7 +333,7 @@ router.post('/register-token', requireFirebase, async (req, res) => {
         {
           devices: existingDevices,
           fcmTokens: distinctTokens,
-          role,
+          role: finalRole,
           notificationsEnabled: true,
           lastActiveAt: new Date().toISOString(),
           lastDevice: deviceName,
@@ -335,14 +342,16 @@ router.post('/register-token', requireFirebase, async (req, res) => {
       );
     }
 
-    // Subscribe to topics according to role
+    // Subscribe to topics according to final role
     if (messaging && token) {
       try {
-        if (role === 'coordinator') {
+        if (finalRole === 'coordinator') {
           await messaging.subscribeToTopic([token], 'coordinators');
+          await messaging.unsubscribeFromTopic([token], 'all-students').catch(() => {});
           addLog('subscribe', `Subscribed token to topic 'coordinators' for UID: ${uid}`);
         } else {
           await messaging.subscribeToTopic([token], 'all-students');
+          await messaging.unsubscribeFromTopic([token], 'coordinators').catch(() => {});
           addLog('subscribe', `Subscribed token to topic 'all-students' for UID: ${uid}`);
         }
       } catch (topicErr) {
@@ -350,9 +359,9 @@ router.post('/register-token', requireFirebase, async (req, res) => {
       }
     }
 
-    addLog('subscribe', `${role === 'coordinator' ? 'Coordinator' : 'User'} registered FCM token (UID: ${uid}, Device: "${deviceName}", DeviceId: "${devKey}")`, {
+    addLog('subscribe', `${finalRole === 'coordinator' ? 'Coordinator' : 'User'} registered push token (UID: ${uid}, Device: "${deviceName}", DeviceId: "${devKey}")`, {
       uid,
-      role,
+      role: finalRole,
       deviceName,
       deviceId: devKey,
       tokenPreview: `${token.slice(0, 16)}...`,
@@ -360,8 +369,8 @@ router.post('/register-token', requireFirebase, async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'FCM token registered successfully.',
-      role,
+      message: 'Push token registered successfully.',
+      role: finalRole,
     });
   } catch (error) {
     addLog('fail', `Error registering FCM token: ${error.message}`, { error: error.message, uid: req.body?.uid });

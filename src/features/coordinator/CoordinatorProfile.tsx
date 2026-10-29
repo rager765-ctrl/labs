@@ -199,7 +199,7 @@ export const CoordinatorProfile: React.FC = () => {
           </div>
         </div>
 
-        {/* Real-time Push Notifications (FCM) Card */}
+        {/* Push Notification Settings */}
         <div style={{ maxWidth: '600px', marginBottom: '20px' }}>
           <PushNotificationSettings />
         </div>

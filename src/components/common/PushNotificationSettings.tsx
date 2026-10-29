@@ -4,10 +4,7 @@ import {
   BellRing,
   BellOff,
   Check,
-  CheckCircle2,
   AlertTriangle,
-  Send,
-  Radio,
   RefreshCw,
 } from 'lucide-react';
 import {
@@ -15,7 +12,6 @@ import {
   unsubscribePush,
   getNotificationPermission,
   isPushNotificationSupported,
-  sendTestPushAlert,
   FCM_SUBSCRIBED_KEY,
   FCM_TOKEN_STORAGE_KEY,
 } from '../../services/fcmClientService';
@@ -24,13 +20,12 @@ import { useApp } from '../../context/AppContext';
 export const PushNotificationSettings: React.FC = () => {
   const { currentUser, firebaseUser, addToast } = useApp();
   const uid = firebaseUser?.uid || currentUser?.id || '';
+  const role = currentUser?.role || 'student';
 
   const [supported, setSupported] = useState<boolean>(true);
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>('default');
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
-  const [testingPush, setTestingPush] = useState<boolean>(false);
-  const [testResult, setTestResult] = useState<{ status: 'idle' | 'success' | 'error'; message?: string }>({ status: 'idle' });
 
   // Channel Preferences
   const [prefLiveSessions, setPrefLiveSessions] = useState<boolean>(() => {
@@ -61,7 +56,7 @@ export const PushNotificationSettings: React.FC = () => {
     }
 
     if (!uid) {
-      addToast('Please sign in to manage your push notification subscriptions.', 'info');
+      addToast('Please sign in to manage your notification preferences.', 'info');
       return;
     }
 
@@ -72,26 +67,25 @@ export const PushNotificationSettings: React.FC = () => {
         const res = await unsubscribePush(uid);
         if (res.success) {
           setIsSubscribed(false);
-          setTestResult({ status: 'idle' });
-          addToast('Unsubscribed from FCM push alerts.', 'info', 'Notifications Disabled');
+          addToast('Push notifications turned off on this device.', 'info', 'Notifications Disabled');
         } else {
-          addToast(res.error || 'Failed to unsubscribe.', 'error');
+          addToast(res.error || 'Failed to turn off notifications.', 'error');
         }
       } finally {
         setLoading(false);
       }
     } else {
-      // Subscribe
+      // Subscribe with user's role preserved
       setLoading(true);
       try {
-        const res = await requestAndSubscribePush(uid);
+        const res = await requestAndSubscribePush(uid, role);
         setPermission(getNotificationPermission());
         if (res.success) {
           setIsSubscribed(true);
           addToast(
-            'FCM push notifications active! You will now receive instant alerts.',
+            'Push notifications enabled for this device.',
             'success',
-            'Subscribed'
+            'Notifications Enabled'
           );
         } else {
           addToast(
@@ -108,34 +102,6 @@ export const PushNotificationSettings: React.FC = () => {
     }
   };
 
-  const handleTestAlert = async () => {
-    if (!uid) {
-      addToast('Please sign in first to test push alerts.', 'info');
-      return;
-    }
-
-    setTestingPush(true);
-    setTestResult({ status: 'idle' });
-    try {
-      const ok = await sendTestPushAlert(uid);
-      if (ok) {
-        setTestResult({ status: 'success', message: 'Test alert delivered! Check your notification center.' });
-        addToast('Test FCM notification sent to your device.', 'success', 'Test Alert Sent');
-      } else {
-        setTestResult({
-          status: 'success',
-          message: 'Test notification sent to your device.',
-        });
-        addToast('Push notification test sent.', 'info', 'Notification Dispatched');
-      }
-    } catch (err: any) {
-      setTestResult({ status: 'error', message: err?.message || 'Failed to send test alert.' });
-      addToast('Could not complete push test.', 'error');
-    } finally {
-      setTestingPush(false);
-    }
-  };
-
   return (
     <div
       style={{
@@ -146,10 +112,10 @@ export const PushNotificationSettings: React.FC = () => {
         boxShadow: 'var(--shadow-card)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '18px',
+        gap: '16px',
       }}
     >
-      {/* Header with Title and Current Status Badge */}
+      {/* Header with Title and Current Status */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
@@ -168,26 +134,11 @@ export const PushNotificationSettings: React.FC = () => {
             {isSubscribed ? <BellRing size={20} /> : <Bell size={20} />}
           </div>
           <div>
-            <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--color-ink-900)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              Push Notifications (FCM)
-              <span
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  padding: '2px 7px',
-                  borderRadius: 'var(--radius-pill)',
-                  backgroundColor: 'var(--color-brand-50)',
-                  color: 'var(--color-brand-700)',
-                  border: '1px solid var(--color-brand-200)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                Cloud Messaging
-              </span>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--color-ink-900)' }}>
+              Push Notifications
             </h2>
             <p style={{ fontSize: '12px', color: 'var(--color-ink-500)', margin: '2px 0 0 0' }}>
-              Real-time alerts when meetings start, sessions are scheduled, or issues resolve.
+              Real-time alerts on this device when sessions start or attendance updates occur.
             </p>
           </div>
         </div>
@@ -200,16 +151,16 @@ export const PushNotificationSettings: React.FC = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '5px',
-                fontSize: '12px',
+                fontSize: '11px',
                 fontWeight: 600,
                 color: 'var(--color-danger-700)',
                 backgroundColor: 'var(--color-danger-50)',
-                padding: '4px 10px',
+                padding: '3px 9px',
                 borderRadius: 'var(--radius-pill)',
                 border: '1px solid var(--color-danger-200)',
               }}
             >
-              <AlertTriangle size={13} /> Browser Blocked
+              <AlertTriangle size={12} /> Browser Blocked
             </span>
           ) : isSubscribed ? (
             <span
@@ -217,16 +168,24 @@ export const PushNotificationSettings: React.FC = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '5px',
-                fontSize: '12px',
+                fontSize: '11px',
                 fontWeight: 600,
                 color: 'var(--color-success-700)',
                 backgroundColor: 'var(--color-success-50)',
-                padding: '4px 10px',
+                padding: '3px 9px',
                 borderRadius: 'var(--radius-pill)',
                 border: '1px solid var(--color-success-200)',
               }}
             >
-              <Radio size={13} className="pulse-dot" /> Subscribed & Active
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--color-success-600)',
+                }}
+              />
+              Active
             </span>
           ) : (
             <span
@@ -234,15 +193,15 @@ export const PushNotificationSettings: React.FC = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '5px',
-                fontSize: '12px',
+                fontSize: '11px',
                 fontWeight: 600,
-                color: 'var(--color-ink-600)',
+                color: 'var(--color-ink-500)',
                 backgroundColor: 'var(--color-ink-100)',
-                padding: '4px 10px',
+                padding: '3px 9px',
                 borderRadius: 'var(--radius-pill)',
               }}
             >
-              <BellOff size={13} /> Inactive
+              <BellOff size={12} /> Off
             </span>
           )}
         </div>
@@ -263,12 +222,12 @@ export const PushNotificationSettings: React.FC = () => {
       >
         <div style={{ flex: 1, paddingRight: '12px' }}>
           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-ink-900)' }}>
-            {isSubscribed ? 'Live Device Notifications Enabled' : 'Enable Real-time Push Notifications'}
+            {isSubscribed ? 'Device Notifications Active' : 'Allow Push Notifications'}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--color-ink-600)', marginTop: '2px' }}>
             {isSubscribed
-              ? 'This device is registered with Firebase Cloud Messaging to receive background push alerts.'
-              : 'Turn on to receive instant alerts when a coordinator starts a lab meeting or answers your request.'}
+              ? 'This device is connected to receive instant alerts.'
+              : 'Turn on to receive instant alerts when sessions start or issues are resolved.'}
           </div>
         </div>
 
@@ -277,13 +236,13 @@ export const PushNotificationSettings: React.FC = () => {
           type="button"
           role="switch"
           aria-checked={isSubscribed}
-          aria-label="Toggle FCM Push Notifications"
+          aria-label="Toggle Push Notifications"
           disabled={loading || !supported}
           onClick={handleToggleSubscription}
           style={{
-            width: '50px',
-            height: '28px',
-            padding: '3px',
+            width: '48px',
+            height: '26px',
+            padding: '2px',
             borderRadius: '999px',
             backgroundColor: isSubscribed ? 'var(--color-brand-700)' : 'var(--color-ink-300)',
             border: 'none',
@@ -336,13 +295,13 @@ export const PushNotificationSettings: React.FC = () => {
           <AlertTriangle size={16} color="var(--color-danger-700)" style={{ flexShrink: 0, marginTop: '2px' }} />
           <div>
             <div style={{ fontWeight: 700, marginBottom: '2px' }}>Browser Permission Blocked</div>
-            Notifications are currently blocked in your browser settings. To receive FCM alerts, click the lock or settings icon next to the address bar, select <strong>Allow Notifications</strong>, and refresh the page.
+            Notifications are currently blocked in your browser settings. To receive alerts, click the lock or settings icon next to the address bar, select <strong>Allow Notifications</strong>, and refresh the page.
           </div>
         </div>
       )}
 
       {/* Notification Preference Channels */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-ink-500)' }}>
           Notification Channels
         </div>
@@ -360,11 +319,11 @@ export const PushNotificationSettings: React.FC = () => {
           }}
         >
           <div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink-900)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ color: 'var(--color-danger-600)' }}>🔴</span> Live Meeting Toggled
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink-900)' }}>
+              Live Sessions
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', marginTop: '1px' }}>
-              Fires when a coordinator opens check-in and starts the session live
+              Alerts when a session starts and check-in opens
             </div>
           </div>
           <input
@@ -373,7 +332,7 @@ export const PushNotificationSettings: React.FC = () => {
             onChange={(e) => {
               setPrefLiveSessions(e.target.checked);
               localStorage.setItem('attendance_pref_live', String(e.target.checked));
-              addToast('Live meeting alert preference updated', 'info');
+              addToast('Live session preference updated', 'info');
             }}
             style={{ width: '18px', height: '18px', accentColor: 'var(--color-brand-700)', cursor: 'pointer' }}
           />
@@ -392,11 +351,11 @@ export const PushNotificationSettings: React.FC = () => {
           }}
         >
           <div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink-900)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>📅</span> New Session Scheduled
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink-900)' }}>
+              Scheduled Sessions
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', marginTop: '1px' }}>
-              Fires when a coordinator creates a new scheduled lab or meeting session
+              Alerts when new lab or meeting sessions are scheduled
             </div>
           </div>
           <input
@@ -424,11 +383,11 @@ export const PushNotificationSettings: React.FC = () => {
           }}
         >
           <div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink-900)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>⚖️</span> Attendance Issue / Correction Resolved
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-ink-900)' }}>
+              Attendance Updates
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-ink-500)', marginTop: '1px' }}>
-              Fires directly to your account when a coordinator resolves or approves your attendance request
+              Alerts when an attendance issue or request is resolved
             </div>
           </div>
           <input
@@ -437,52 +396,11 @@ export const PushNotificationSettings: React.FC = () => {
             onChange={(e) => {
               setPrefCorrections(e.target.checked);
               localStorage.setItem('attendance_pref_corrections', String(e.target.checked));
-              addToast('Correction notification preference updated', 'info');
+              addToast('Attendance update preference updated', 'info');
             }}
             style={{ width: '18px', height: '18px', accentColor: 'var(--color-brand-700)', cursor: 'pointer' }}
           />
         </label>
-      </div>
-
-      {/* Action Row: Send Test Notification Only */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '12px', paddingTop: '4px' }}>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={handleTestAlert}
-          disabled={testingPush || !isSubscribed}
-          style={{
-            height: '36px',
-            padding: '0 14px',
-            fontSize: '12px',
-            gap: '6px',
-            display: 'inline-flex',
-            alignItems: 'center',
-          }}
-        >
-          {testingPush ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}
-          <span>{testingPush ? 'Dispatching...' : 'Send Test Push Alert'}</span>
-        </button>
-
-        {/* Test Status feedback */}
-        {testResult.status !== 'idle' && (
-          <div
-            style={{
-              fontSize: '12px',
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-sm)',
-              backgroundColor: testResult.status === 'success' ? 'var(--color-success-50)' : 'var(--color-danger-50)',
-              color: testResult.status === 'success' ? 'var(--color-success-800)' : 'var(--color-danger-800)',
-              border: `1px solid ${testResult.status === 'success' ? 'var(--color-success-200)' : 'var(--color-danger-200)'}`,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            {testResult.status === 'success' ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
-            <span>{testResult.message}</span>
-          </div>
-        )}
       </div>
     </div>
   );

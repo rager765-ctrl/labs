@@ -100,7 +100,7 @@ export async function requestAndSubscribePush(uid: string, role?: string): Promi
     if (db && uid) {
       try {
         const userRef = doc(db, 'users', uid);
-        await setDoc(userRef, {
+        const updatePayload: any = {
           devices: {
             [deviceId]: {
               token: currentToken,
@@ -109,21 +109,30 @@ export async function requestAndSubscribePush(uid: string, role?: string): Promi
             },
           },
           fcmTokens: arrayUnion(currentToken),
-          role: role || 'student',
           notificationsEnabled: true,
           fcmSubscribedAt: new Date().toISOString(),
           lastActiveAt: new Date().toISOString(),
-        }, { merge: true });
+        };
+
+        // CRITICAL: Only update role if explicitly provided to prevent demoting coordinators
+        if (role) {
+          updatePayload.role = role;
+        }
+
+        await setDoc(userRef, updatePayload, { merge: true });
 
         // Backup in fcmTokens collection for fast lookup
         const tokenDocRef = doc(db, 'fcmTokens', currentToken.slice(0, 64));
-        await setDoc(tokenDocRef, {
+        const tokenPayload: any = {
           token: currentToken,
           uid,
           deviceId,
-          role: role || 'student',
           createdAt: new Date().toISOString(),
-        }, { merge: true }).catch(() => {});
+        };
+        if (role) {
+          tokenPayload.role = role;
+        }
+        await setDoc(tokenDocRef, tokenPayload, { merge: true }).catch(() => {});
       } catch (err) {
         console.warn('Could not save FCM token directly to Firestore:', err);
       }
@@ -132,16 +141,19 @@ export async function requestAndSubscribePush(uid: string, role?: string): Promi
     // 2. Register token with backend service on Render
     try {
       const backendUrl = getBackendBaseUrl();
+      const registerPayload: any = {
+        uid,
+        token: currentToken,
+        deviceId,
+        deviceName,
+      };
+      if (role) {
+        registerPayload.role = role;
+      }
       const res = await fetch(`${backendUrl}/api/notifications/register-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uid,
-          token: currentToken,
-          deviceId,
-          role: role || 'student',
-          deviceName,
-        }),
+        body: JSON.stringify(registerPayload),
       });
       if (!res.ok) {
         console.warn('Backend register-token returned non-200 status:', res.status);
