@@ -95,21 +95,9 @@ export const CoordinatorSessionList: React.FC = () => {
             {(['all', 'live', 'scheduled', 'completed', 'cancelled'] as const).map(filter => (
               <button
                 key={filter}
+                className={`filter-pill ${statusFilter === filter ? 'active' : ''}`}
                 onClick={() => setStatusFilter(filter)}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: 'var(--radius-pill)',
-                  border: '1px solid',
-                  borderColor: statusFilter === filter ? 'var(--color-brand-700)' : 'var(--color-line)',
-                  backgroundColor: statusFilter === filter ? 'var(--color-brand-700)' : '#FFFFFF',
-                  color: statusFilter === filter ? '#FFFFFF' : 'var(--color-ink-700)',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  textTransform: 'capitalize',
-                  transition: 'all 0.15s ease',
-                }}
+                style={{ padding: '6px 14px', fontSize: '12px' }}
               >
                 {filter === 'all' ? 'All Sessions' : filter}
               </button>

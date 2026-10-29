@@ -156,23 +156,23 @@ export const StudentHistory: React.FC = () => {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-500)' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-600)' }}>
               Meeting
               <select
                 value={selectedSession}
                 onChange={event => setSelectedSession(event.target.value)}
-                style={{ minWidth: 0, width: '100%', height: '38px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-line)', padding: '0 9px', color: 'var(--color-ink-900)', background: '#FFFFFF', fontSize: '12px' }}
+                style={{ minWidth: 0, width: '100%', height: '38px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-line)', padding: '0 9px', color: 'var(--color-ink-900)', background: 'var(--color-surface)', fontSize: '12px' }}
               >
                 <option value="all">All meetings</option>
                 {Array.from(new Map(historyItems.filter(item => item.session).map(item => [item.session!.id, item.session!.title])).entries()).map(([id, title]) => <option key={id} value={id}>{title}</option>)}
               </select>
             </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-500)' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 600, color: 'var(--color-ink-600)' }}>
               Month
               <select
                 value={selectedMonth}
                 onChange={event => setSelectedMonth(event.target.value)}
-                style={{ minWidth: 0, width: '100%', height: '38px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-line)', padding: '0 9px', color: 'var(--color-ink-900)', background: '#FFFFFF', fontSize: '12px' }}
+                style={{ minWidth: 0, width: '100%', height: '38px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-line)', padding: '0 9px', color: 'var(--color-ink-900)', background: 'var(--color-surface)', fontSize: '12px' }}
               >
                 <option value="all">All months</option>
                 {months.map(month => <option key={month.key} value={month.key}>{month.label}</option>)}
@@ -193,21 +193,8 @@ export const StudentHistory: React.FC = () => {
             {(['all', 'present', 'late', 'absent', 'excused'] as const).map(filter => (
               <button
                 key={filter}
+                className={`filter-pill ${selectedFilter === filter ? 'active' : ''}`}
                 onClick={() => setSelectedFilter(filter)}
-                style={{
-                  padding: '5px 12px',
-                  borderRadius: 'var(--radius-pill)',
-                  border: '1px solid',
-                  borderColor: selectedFilter === filter ? 'var(--color-brand-700)' : 'var(--color-line)',
-                  backgroundColor: selectedFilter === filter ? 'var(--color-brand-700)' : '#FFFFFF',
-                  color: selectedFilter === filter ? '#FFFFFF' : 'var(--color-ink-700)',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  textTransform: 'capitalize',
-                  transition: 'all 0.15s ease',
-                }}
               >
                 {filter === 'all' ? 'All Records' : filter === 'absent' ? 'Missed' : filter}
               </button>

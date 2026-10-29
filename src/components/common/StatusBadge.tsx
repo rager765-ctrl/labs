@@ -93,6 +93,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'sm', s
 
   return (
     <span
+      className={`status-badge status-badge--${status}`}
       style={{
         display: 'inline-flex',
         alignItems: 'center',

@@ -223,19 +223,8 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
               {(['all', 'present', 'late', 'absent', 'excused'] as const).map(filter => (
                 <button
                   key={filter}
+                  className={`filter-pill ${statusFilter === filter ? 'active' : ''}`}
                   onClick={() => setStatusFilter(filter)}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: 'var(--radius-pill)',
-                    border: '1px solid',
-                    borderColor: statusFilter === filter ? 'var(--color-brand-700)' : 'var(--color-line)',
-                    backgroundColor: statusFilter === filter ? 'var(--color-brand-700)' : '#FFFFFF',
-                    color: statusFilter === filter ? '#FFFFFF' : 'var(--color-ink-700)',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    textTransform: 'capitalize',
-                  }}
                 >
                   {filter}
                 </button>
