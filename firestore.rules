@@ -1,0 +1,141 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function userExists() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isCoordinator() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'e.vance@university.edu' ||
+        (request.auth.token.email != null && request.auth.token.email.matches('.*coord.*')) ||
+        request.auth.token.role == 'coordinator' ||
+        (userExists() && getUserData().role == 'coordinator')
+      );
+    }
+
+    function isInviteRedeemedForUser(inviteToken, userId) {
+      let invitePath = /databases/$(database)/documents/coordinatorInvites/$(inviteToken);
+      return inviteToken is string &&
+        existsAfter(invitePath) &&
+        getAfter(invitePath).data.usedBy == userId;
+    }
+
+    // ==========================================
+    // 1. Users collection: /users/{userId}
+    // ==========================================
+    match /users/{userId} {
+      // Any authenticated user can read user profiles (needed for student rosters & coordinator details)
+      allow read: if isAuthenticated();
+
+      // Users can create and manage their own profile document
+      allow create: if isOwner(userId) || isCoordinator();
+
+      // Allow owner or coordinator to update profile, FCM device tokens, and preferences
+      allow update: if isOwner(userId) || isCoordinator();
+
+      allow delete: if false; // Profiles shouldn't be deleted via client
+
+      // Device tokens subcollection
+      match /fcmTokens/{tokenId} {
+        allow read, write: if isOwner(userId) || isCoordinator();
+      }
+    }
+
+    // Coordinator onboarding links are single-use bearer invitations.
+    match /coordinatorInvites/{inviteToken} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isCoordinator() &&
+        request.resource.data.token == inviteToken &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.usedBy == null &&
+        request.resource.data.expiresAt > request.time;
+      allow update: if isAuthenticated() &&
+        resource.data.usedBy == null &&
+        resource.data.expiresAt > request.time &&
+        request.resource.data.usedBy == request.auth.uid &&
+        getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'coordinator' &&
+        getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.onboardingInvite == inviteToken;
+      allow delete: if false;
+    }
+
+    // ==========================================
+    // 2. Lab Sessions collection: /sessions/{sessionId}
+    // ==========================================
+    match /sessions/{sessionId} {
+      // Students and coordinators can view sessions
+      allow read: if isAuthenticated();
+
+      // Coordinators and session creators can create, update, or cancel sessions
+      allow create: if isAuthenticated() && (
+        isCoordinator() ||
+        request.resource.data.coordinatorId == request.auth.uid
+      );
+      allow update: if isAuthenticated() && (
+        isCoordinator() ||
+        resource.data.coordinatorId == request.auth.uid ||
+        request.resource.data.coordinatorId == request.auth.uid
+      );
+      allow delete: if isAuthenticated() && (
+        isCoordinator() ||
+        resource.data.coordinatorId == request.auth.uid
+      );
+    }
+
+    // ==========================================
+    // 3. Attendance records: /attendance/{recordId}
+    // ==========================================
+    match /attendance/{recordId} {
+      // Authenticated students and coordinators can read attendance
+      allow read: if isAuthenticated();
+
+      // Students can record their own check-in/out, coordinators can mark manually
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && isCoordinator();
+    }
+
+    // ==========================================
+    // 4. Attendance Corrections: /corrections/{correctionId}
+    // ==========================================
+    match /corrections/{correctionId} {
+      // Authenticated users can view correction requests
+      allow read: if isAuthenticated();
+
+      // Students can submit correction requests
+      allow create: if isAuthenticated();
+
+      // Coordinators can approve or reject, students can update their pending requests
+      allow update: if isAuthenticated() && (
+        isCoordinator() ||
+        resource.data.studentId == request.auth.uid
+      );
+      allow delete: if isAuthenticated() && isCoordinator();
+    }
+
+    // ==========================================
+    // 5. FCM Device Tokens: /fcmTokens/{tokenId}
+    // ==========================================
+    match /fcmTokens/{tokenId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+  }
+}
