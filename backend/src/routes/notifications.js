@@ -38,19 +38,33 @@ function buildWebPushConfig(title, body, url = '/') {
   return {
     headers: {
       Urgency: 'high',
+      TTL: '86400',
     },
     notification: {
       title,
       body,
-      icon: '/favicon.svg',
-      badge: '/favicon.svg',
+      icon: '/icon-192.png',
+      badge: '/badge.png',
       requireInteraction: true,
+      tag: 'attendance-' + Date.now(),
+      renotify: true,
     },
     fcmOptions: {
       link: url,
     },
   };
 }
+
+const ANDROID_PUSH_CONFIG = {
+  priority: 'high',
+  ttl: 86400 * 1000,
+  notification: {
+    priority: 'high',
+    defaultSound: true,
+    defaultVibrateTimings: true,
+    icon: '/icon-192.png',
+  },
+};
 
 /**
  * GET /api/notifications/logs
@@ -328,6 +342,7 @@ router.post('/coordinator-alert', async (req, res) => {
           notification: { title, body },
           data: { type: type || 'coordinator_alert', sessionId: sessionId || '', url },
           webpush: buildWebPushConfig(title, body, url),
+          android: ANDROID_PUSH_CONFIG,
         });
 
         deliveryResults.fcm = {
@@ -358,6 +373,7 @@ router.post('/coordinator-alert', async (req, res) => {
             notification: { title, body },
             data: { type: type || 'coordinator_alert', sessionId: sessionId || '', url },
             webpush: buildWebPushConfig(title, body, url),
+            android: ANDROID_PUSH_CONFIG,
           });
           deliveryResults.fcm = { success: true, mode: 'topic_coordinators', messageId: response };
           addLog('success', `Delivered coordinator alert via topic "${topic}". MessageId: ${response}`);
@@ -450,6 +466,7 @@ router.post('/send-to-token', requireFirebase, async (req, res) => {
         timestamp: new Date().toISOString(),
       },
       webpush: buildWebPushConfig(title, body, url),
+      android: ANDROID_PUSH_CONFIG,
     };
 
     const response = await messaging.send(message);
@@ -531,6 +548,7 @@ router.post('/send-to-user', requireFirebase, async (req, res) => {
         click_action: url,
       },
       webpush: buildWebPushConfig(title, body, url),
+      android: ANDROID_PUSH_CONFIG,
     };
 
     const response = await messaging.sendEachForMulticast(multicastMessage);
@@ -704,6 +722,7 @@ router.post('/session-alert', async (req, res) => {
             notification: { title, body },
             data: { sessionId, targetUrl },
             webpush: buildWebPushConfig(title, body, targetUrl),
+            android: ANDROID_PUSH_CONFIG,
           });
 
           deliveryResults.fcm = {
@@ -737,6 +756,7 @@ router.post('/session-alert', async (req, res) => {
             notification: { title, body },
             data: { sessionId, targetUrl },
             webpush: buildWebPushConfig(title, body, targetUrl),
+            android: ANDROID_PUSH_CONFIG,
           });
           deliveryResults.fcm = { success: true, mode: 'topic', messageId: response };
         } catch (topicErr) {
@@ -858,6 +878,7 @@ router.post('/correction-alert', async (req, res) => {
           notification: { title, body },
           data: { type: 'correction_update', status },
           webpush: buildWebPushConfig(title, body, '/student/history'),
+          android: ANDROID_PUSH_CONFIG,
         });
 
         deliveryResults.fcm = {

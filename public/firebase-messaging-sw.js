@@ -3,7 +3,7 @@ importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js
 importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js');
 
 // Service Worker lifecycle - activate immediately
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
@@ -21,28 +21,49 @@ firebase.initializeApp({
   appId: "1:84609395922:web:140353f3a9a66c1aa5510b",
 });
 
-// Retrieve an instance of Firebase Messaging
 const messaging = firebase.messaging();
 
-// Handle data-only background messages
-messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Background message received:', payload);
+/**
+ * Standard notification renderer using real PNG bitmaps supported across all mobile & desktop operating systems
+ */
+function showBackgroundNotification(payload) {
+  if (!payload) return Promise.resolve();
 
-  const title = payload.notification?.title || payload.data?.title || 'Innovations Lab Attendance';
+  const notification = payload.notification || {};
+  const data = payload.data || {};
+
+  const title = notification.title || data.title || payload.title || 'Innovations Lab Attendance';
+  const body = notification.body || data.body || payload.body || 'New session or attendance update.';
+  const tag = data.sessionId || data.tag || notification.tag || 'attendance-' + Date.now();
+  const targetUrl = data.click_action || data.url || data.targetUrl || notification.click_action || '/';
+
   const options = {
-    body: payload.notification?.body || payload.data?.body || 'New session or attendance update.',
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
-    tag: payload.data?.sessionId || 'attendance-' + Date.now(),
-    data: payload.data || {},
+    body,
+    icon: '/icon-192.png',
+    badge: '/badge.png',
+    tag,
+    renotify: true,
+    data: {
+      ...data,
+      click_action: targetUrl,
+      url: targetUrl,
+    },
     vibrate: [200, 100, 200],
     requireInteraction: true,
+    silent: false,
   };
 
-  self.registration.showNotification(title, options);
+  return self.registration.showNotification(title, options);
+}
+
+// Firebase SDK background handler
+messaging.onBackgroundMessage((payload) => {
+  console.log('[firebase-messaging-sw.js] onBackgroundMessage received:', payload);
+  return showBackgroundNotification(payload);
 });
 
 // Generic WebPush push event handler ensuring outside-app OS notification banners
+// Keeps the Service Worker process alive until Android/Windows OS accepts the notification
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
@@ -50,24 +71,10 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { body: event.data.text() };
+    payload = { data: { body: event.data.text() } };
   }
 
-  const title = payload.notification?.title || payload.data?.title || payload.title || 'Innovations Lab Attendance';
-  const body = payload.notification?.body || payload.data?.body || payload.body || 'New session or attendance update.';
-  const tag = payload.data?.sessionId || payload.notification?.tag || 'attendance-' + Date.now();
-
-  const options = {
-    body,
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
-    tag,
-    data: payload.data || payload,
-    vibrate: [200, 100, 200],
-    requireInteraction: true,
-  };
-
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(showBackgroundNotification(payload));
 });
 
 // Handle notification click to navigate to the relevant session or history page
@@ -84,6 +91,9 @@ self.addEventListener('notificationclick', (event) => {
       // If a window is already open, focus it
       for (const client of windowClients) {
         if (client.url && 'focus' in client) {
+          if ('navigate' in client && targetUrl !== '/') {
+            client.navigate(targetUrl);
+          }
           return client.focus();
         }
       }
