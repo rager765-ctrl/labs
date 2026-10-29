@@ -552,7 +552,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return {
         success: false,
         code: 'already_checked_in',
-        message: `You are already recorded as ${existing.status.toUpperCase()} at ${new Date(existing.checkedInAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        message: `Attendance already recorded: You are already marked as ${existing.status.toUpperCase()} for this session. PIN check-in and QR scan are equal alternatives—duplicate check-ins are not permitted.`,
         record: existing,
       };
     }

@@ -313,7 +313,7 @@ export const StudentHistory: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '11px', color: 'var(--color-ink-700)', flexWrap: 'wrap' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                       <Clock size={12} color="var(--color-ink-500)" />
-                      {formatDate(session.startsAt)} â€¢ {formatTime(session.startsAt)}
+                      {formatDate(session.startsAt)}, {formatTime(session.startsAt)}
                     </span>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                       <MapPin size={12} color="var(--color-ink-500)" />

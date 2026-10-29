@@ -48,6 +48,11 @@ export const ScannerView: React.FC = () => {
     ? sessions.find(s => s.id === requestedSessionId && s.status === 'live')
     : undefined;
 
+  const activeRecord = activeSession && currentUser
+    ? attendanceRecords.find(r => r.sessionId === activeSession.id && r.studentId === currentUser.id)
+    : null;
+  const isActiveAlreadyRecorded = !!(activeRecord && (activeRecord.status === 'present' || activeRecord.status === 'late'));
+
   useEffect(() => {
     if (!sheetConfig.isOpen || !hasScannedCode) return;
     const timer = window.setTimeout(() => {
@@ -158,79 +163,81 @@ export const ScannerView: React.FC = () => {
     const currentRec = attendanceRecords.find(r => r.sessionId === matchedSession.id && r.studentId === currentUser.id);
     const checkedIn = currentRec && (currentRec.status === 'present' || currentRec.status === 'late');
 
-    if (checkedIn && !currentRec.checkedOutAt && matchedSession.requiresCheckOut) {
-      // Check out
-      const result = await checkOutStudent(matchedSession.id, currentUser.id);
+    // Both PIN check-in and QR scan are equal alternatives. If already recorded, flag immediately.
+    if (checkedIn) {
+      const checkInTime = formatTime(currentRec.checkedInAt || new Date().toISOString());
+      const methodAudit = currentRec.audit?.find(a => a.action?.includes('Checked in via'))?.action;
+      const methodLabel = methodAudit
+        ? methodAudit.split('(')[0].replace('Checked in via', '').trim()
+        : (currentRec.note || 'Verified Check-In');
+
       setSheetConfig({
         isOpen: true,
-        type: result.success ? 'success' : 'error',
-        title: result.success
-          ? 'Checked Out Successfully'
-          : result.code === 'geofence_out_of_range'
-          ? 'Location Verification Failed'
-          : 'Device Location Required',
+        type: 'info',
+        title: 'Already Recorded',
+        message: `Your attendance for "${matchedSession.title}" has already been verified and recorded (${currentRec.status.toUpperCase()} at ${checkInTime}). PIN check-in and QR scan are equal alternatives—duplicate check-ins are not permitted.`,
+        details: [
+          { label: 'Session', value: matchedSession.title },
+          { label: 'Room', value: matchedSession.room },
+          { label: 'Status', value: currentRec.status === 'late' ? 'Recorded Late' : 'Recorded Present' },
+          { label: 'Check-In Method', value: methodLabel },
+          { label: 'Check-In Time', value: checkInTime },
+          ...(currentRec.checkedOutAt ? [{ label: 'Check-Out Time', value: formatTime(currentRec.checkedOutAt) }] : []),
+        ],
+        primaryActionText: 'Return to Home',
+        onPrimaryAction: () => navigate('/student'),
+      });
+      return;
+    }
+
+    // Check in
+    const result = checkInStudent(matchedSession.id, currentUser.id, 'Camera QR Scan', studentCoords || undefined);
+    if (result.success) {
+      setSheetConfig({
+        isOpen: true,
+        type: result.code === 'success_late' ? 'warning' : 'success',
+        title: result.code === 'success_late' ? 'Recorded Late' : 'Check-In Confirmed',
         message: result.message,
         details: [
-          { label: 'Meeting', value: matchedSession.title },
+          { label: 'Location', value: matchedSession.labName || matchedSession.room },
+          { label: 'Session', value: matchedSession.title },
           { label: 'Room', value: matchedSession.room },
-          ...(result.distanceMeters !== undefined ? [{ label: 'Proximity', value: `${formatDistance(result.distanceMeters)} from venue` }] : []),
-          ...(result.success ? [{ label: 'Exit Time', value: formatTime(result.record?.checkedOutAt || new Date().toISOString()) }] : []),
+          { label: 'Status', value: result.code === 'success_late' ? 'Late (+15m)' : 'Present on Time' },
+          { label: 'Proximity', value: result.distanceMeters !== undefined ? `Verified in Lab (${formatDistance(result.distanceMeters)})` : 'Verified on Campus' },
+          { label: 'Timestamp', value: formatTime(result.record?.checkedInAt || new Date().toISOString()) },
         ],
-        primaryActionText: result.success ? 'Return to Home' : 'Try Again',
+        primaryActionText: 'View Dashboard',
+        onPrimaryAction: () => navigate('/student'),
+      });
+    } else {
+      const isGeoError = result.code === 'geofence_out_of_range' || result.code === 'geolocation_required';
+      setSheetConfig({
+        isOpen: true,
+        type: isGeoError ? 'error' : result.code === 'already_checked_in' ? 'info' : 'error',
+        title: result.code === 'geofence_out_of_range'
+          ? 'Location Verification Failed'
+          : result.code === 'geolocation_required'
+          ? 'GPS Location Required'
+          : result.code === 'already_checked_in'
+          ? 'Already Recorded'
+          : 'Check-In Notice',
+        message: result.message,
+        details: result.code === 'geofence_out_of_range' ? [
+          { label: 'Venue', value: result.venueName || matchedSession.room },
+          { label: 'Your Distance', value: formatDistance(result.distanceMeters || 0) },
+          { label: 'Allowed Range', value: `Within ${result.requiredRadius || 50}m` },
+          { label: 'Requirement', value: 'Physical presence in lab' },
+        ] : undefined,
+        primaryActionText: result.code === 'already_checked_in' ? 'Return to Home' : 'Scan Again',
         onPrimaryAction: () => {
-          if (result.success) navigate('/student');
-          else {
+          if (result.code === 'already_checked_in') {
+            navigate('/student');
+          } else {
             setHasScannedCode(false);
             setSheetConfig(prev => ({ ...prev, isOpen: false }));
           }
         },
       });
-    } else {
-      // Check in
-      const result = checkInStudent(matchedSession.id, currentUser.id, 'Camera QR Scan', studentCoords || undefined);
-      if (result.success) {
-        setSheetConfig({
-          isOpen: true,
-          type: result.code === 'success_late' ? 'warning' : 'success',
-          title: result.code === 'success_late' ? 'Recorded Late' : 'Check-In Confirmed',
-          message: result.message,
-          details: [
-            { label: 'Location', value: matchedSession.labName || matchedSession.room },
-            { label: 'Session', value: matchedSession.title },
-            { label: 'Room', value: matchedSession.room },
-            { label: 'Status', value: result.code === 'success_late' ? 'Late (+15m)' : 'Present on Time' },
-            { label: 'Proximity', value: result.distanceMeters !== undefined ? `Verified in Lab (${formatDistance(result.distanceMeters)})` : 'Verified on Campus' },
-            { label: 'Timestamp', value: formatTime(result.record?.checkedInAt || new Date().toISOString()) },
-          ],
-          primaryActionText: 'View Dashboard',
-          onPrimaryAction: () => navigate('/student'),
-        });
-      } else {
-        const isGeoError = result.code === 'geofence_out_of_range' || result.code === 'geolocation_required';
-        setSheetConfig({
-          isOpen: true,
-          type: isGeoError ? 'error' : result.code === 'already_checked_in' ? 'info' : 'error',
-          title: result.code === 'geofence_out_of_range'
-            ? 'Location Verification Failed'
-            : result.code === 'geolocation_required'
-            ? 'GPS Location Required'
-            : result.code === 'already_checked_in'
-            ? 'Already Recorded'
-            : 'Check-In Notice',
-          message: result.message,
-          details: result.code === 'geofence_out_of_range' ? [
-            { label: 'Venue', value: result.venueName || matchedSession.room },
-            { label: 'Your Distance', value: formatDistance(result.distanceMeters || 0) },
-            { label: 'Allowed Range', value: `Within ${result.requiredRadius || 50}m` },
-            { label: 'Requirement', value: 'Physical presence in lab' },
-          ] : undefined,
-          primaryActionText: 'Scan Again',
-          onPrimaryAction: () => {
-            setHasScannedCode(false);
-            setSheetConfig(prev => ({ ...prev, isOpen: false }));
-          },
-        });
-      }
     }
   }, [hasScannedCode, sessions, attendanceRecords, currentUser?.id, studentCoords, checkInStudent, checkOutStudent, navigate]);
 
@@ -415,13 +422,42 @@ export const ScannerView: React.FC = () => {
       return;
     }
 
-    if (activeSession.pin && pinInput.trim() !== activeSession.pin) {
-      setPinError('Incorrect session PIN. Please verify it with the meeting coordinator.');
+    if (!currentUser) {
+      setPinError('Please sign in to verify session PIN.');
       return;
     }
 
-    if (!currentUser) {
-      setPinError('Please sign in to verify session PIN.');
+    // Guard: Both PIN check-in and QR scan are equal alternatives
+    const currentRec = attendanceRecords.find(r => r.sessionId === activeSession.id && r.studentId === currentUser.id);
+    const checkedIn = currentRec && (currentRec.status === 'present' || currentRec.status === 'late');
+    if (checkedIn) {
+      const checkInTime = formatTime(currentRec.checkedInAt || new Date().toISOString());
+      const methodAudit = currentRec.audit?.find(a => a.action?.includes('Checked in via'))?.action;
+      const methodLabel = methodAudit
+        ? methodAudit.split('(')[0].replace('Checked in via', '').trim()
+        : (currentRec.note || 'Verified Check-In');
+
+      setPinError(`Attendance already recorded: You are already marked as ${currentRec.status.toUpperCase()} at ${checkInTime}. Both PIN check-in and QR scan alternatives are equal.`);
+      setSheetConfig({
+        isOpen: true,
+        type: 'info',
+        title: 'Already Recorded',
+        message: `Your attendance for "${activeSession.title}" has already been verified and recorded (${currentRec.status.toUpperCase()} at ${checkInTime}). PIN check-in and QR scan are equal alternatives—duplicate check-ins are not permitted.`,
+        details: [
+          { label: 'Session', value: activeSession.title },
+          { label: 'Room', value: activeSession.room },
+          { label: 'Status', value: currentRec.status === 'late' ? 'Recorded Late' : 'Recorded Present' },
+          { label: 'Check-In Method', value: methodLabel },
+          { label: 'Check-In Time', value: checkInTime },
+        ],
+        primaryActionText: 'Return to Home',
+        onPrimaryAction: () => navigate('/student'),
+      });
+      return;
+    }
+
+    if (activeSession.pin && pinInput.trim() !== activeSession.pin) {
+      setPinError('Incorrect session PIN. Please verify it with the meeting coordinator.');
       return;
     }
 
@@ -923,6 +959,26 @@ export const ScannerView: React.FC = () => {
               The 4-digit code displayed on the lab projector or coordinator screen.
             </p>
 
+            {isActiveAlreadyRecorded && (
+              <div
+                style={{
+                  backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                  border: '1px solid rgba(34, 197, 94, 0.35)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '12px',
+                  marginBottom: '14px',
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ color: '#4ADE80', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                  <CheckCircle2 size={15} /> Attendance Already Recorded
+                </div>
+                <div style={{ color: '#E2E8F0', fontSize: '11px', lineHeight: '15px' }}>
+                  You are already recorded for this session. PIN check-in and QR scan are equal alternatives—duplicate check-ins are not permitted.
+                </div>
+              </div>
+            )}
+
             <input
               type="text"
               maxLength={4}
@@ -930,6 +986,7 @@ export const ScannerView: React.FC = () => {
               inputMode="numeric"
               placeholder="e.g. 8492"
               value={pinInput}
+              disabled={isActiveAlreadyRecorded}
               onChange={(e) => setPinInput(e.target.value.replace(/[^0-9]/g, ''))}
               style={{
                 width: '100%',
@@ -944,8 +1001,10 @@ export const ScannerView: React.FC = () => {
                 letterSpacing: '8px',
                 marginBottom: '12px',
                 outline: 'none',
+                opacity: isActiveAlreadyRecorded ? 0.5 : 1,
+                cursor: isActiveAlreadyRecorded ? 'not-allowed' : 'text',
               }}
-              autoFocus
+              autoFocus={!isActiveAlreadyRecorded}
             />
 
             {pinError && (
@@ -968,9 +1027,16 @@ export const ScannerView: React.FC = () => {
             <button
               type="submit"
               className="btn-primary"
-              style={{ width: '100%', height: '44px', fontSize: '13px' }}
+              disabled={isActiveAlreadyRecorded}
+              style={{
+                width: '100%',
+                height: '44px',
+                fontSize: '13px',
+                opacity: isActiveAlreadyRecorded ? 0.6 : 1,
+                cursor: isActiveAlreadyRecorded ? 'not-allowed' : 'pointer',
+              }}
             >
-              Verify PIN & Check In
+              {isActiveAlreadyRecorded ? 'Already Recorded' : 'Verify PIN & Check In'}
             </button>
           </form>
         )}
