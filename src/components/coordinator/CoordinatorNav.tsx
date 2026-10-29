@@ -135,16 +135,11 @@ export const CoordinatorNav: React.FC = () => {
           left: 0,
           right: 0,
           height: 'calc(var(--size-nav) + env(safe-area-inset-bottom, 0px))',
-          backgroundColor: 'rgba(255, 255, 255, 0.07)',
-          borderTop: '1px solid rgba(255, 255, 255, 0.18)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-around',
           padding: '0 5px env(safe-area-inset-bottom, 0px)',
           zIndex: 40,
-          boxShadow: '0 -6px 24px rgba(23, 34, 77, 0.08), inset 0 1px 0 rgba(255,255,255,0.22)',
-          backdropFilter: 'blur(22px) saturate(1.55)',
-          WebkitBackdropFilter: 'blur(22px) saturate(1.55)',
         }}
       >
         {links.map(({ to, label, icon: Icon, end }) => (

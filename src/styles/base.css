@@ -60,6 +60,41 @@ body::after {
   border-color: var(--color-line);
 }
 
+:root[data-theme='dark'] #root div[style*="background-color: #FFFFFF"],
+:root[data-theme='dark'] #root div[style*="background-color: #ffffff"],
+:root[data-theme='dark'] #root div[style*="background-color: rgb(255, 255, 255)"],
+:root[data-theme='dark'] #root div[style*="background-color: rgb(255,255,255)"],
+:root[data-theme='dark'] #root section[style*="background-color: #FFFFFF"],
+:root[data-theme='dark'] #root section[style*="background-color: #ffffff"],
+:root[data-theme='dark'] #root label[style*="background-color: #FAFAFB"],
+:root[data-theme='dark'] #root label[style*="background-color: #fafafb"],
+:root[data-theme='dark'] #root div[style*="background-color: #FAFAFB"],
+:root[data-theme='dark'] #root div[style*="background-color: #fafafb"] {
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-line) !important;
+}
+
+:root[data-theme='dark'] .student-avatar-box {
+  background-color: #243254 !important;
+  color: #c0cdfd !important;
+  border-color: #657de8 !important;
+}
+
+:root[data-theme='dark'] .role-badge {
+  background-color: #243254 !important;
+  color: #c0cdfd !important;
+}
+
+:root[data-theme='dark'] .push-notification-icon-box {
+  background-color: #243254 !important;
+  color: #c0cdfd !important;
+}
+
+:root[data-theme='dark'] .notification-channel-item {
+  background-color: rgba(32, 43, 66, 0.45) !important;
+  border-color: var(--color-line) !important;
+}
+
 :root[data-theme='dark'] input,
 :root[data-theme='dark'] select,
 :root[data-theme='dark'] textarea {
@@ -351,8 +386,33 @@ button:focus:not(:focus-visible) {
 .coordinator-mobile-nav {
   isolation: isolate;
   overflow: visible;
-  backdrop-filter: blur(22px) saturate(1.55);
-  -webkit-backdrop-filter: blur(22px) saturate(1.55);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  background-color: rgba(255, 255, 255, 0.90);
+  border-top: 1px solid var(--color-line);
+  box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.06);
+}
+
+:root[data-theme='dark'] .mobile-nav-dock,
+:root[data-theme='dark'] .coordinator-mobile-nav {
+  background-color: rgba(21, 28, 43, 0.92) !important;
+  border-top: 1px solid var(--color-line) !important;
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+:root[data-theme='dark'] .nav-dock-item {
+  color: var(--color-ink-500);
+}
+
+:root[data-theme='dark'] .nav-dock-item.active,
+:root[data-theme='dark'] .nav-dock-item[aria-current='page'] {
+  color: #c0cdfd !important;
+}
+
+:root[data-theme='dark'] .nav-dock-item.active .nav-dock-icon,
+:root[data-theme='dark'] .nav-dock-item[aria-current='page'] .nav-dock-icon {
+  background-color: #26365a !important;
+  color: #c0cdfd !important;
 }
 
 .mobile-nav-dock > div {

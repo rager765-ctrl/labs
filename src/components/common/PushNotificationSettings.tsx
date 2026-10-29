@@ -104,8 +104,9 @@ export const PushNotificationSettings: React.FC = () => {
 
   return (
     <div
+      className="card"
       style={{
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'var(--color-surface)',
         borderRadius: 'var(--radius-md)',
         border: '1px solid var(--color-line)',
         padding: '20px',
@@ -119,6 +120,7 @@ export const PushNotificationSettings: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
+            className="push-notification-icon-box"
             style={{
               width: '36px',
               height: '36px',
@@ -307,6 +309,7 @@ export const PushNotificationSettings: React.FC = () => {
         </div>
 
         <label
+          className="notification-channel-item"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -315,7 +318,7 @@ export const PushNotificationSettings: React.FC = () => {
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--color-line)',
             cursor: 'pointer',
-            backgroundColor: '#FAFAFB',
+            backgroundColor: 'var(--color-brand-50)',
           }}
         >
           <div>
@@ -339,6 +342,7 @@ export const PushNotificationSettings: React.FC = () => {
         </label>
 
         <label
+          className="notification-channel-item"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -347,7 +351,7 @@ export const PushNotificationSettings: React.FC = () => {
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--color-line)',
             cursor: 'pointer',
-            backgroundColor: '#FAFAFB',
+            backgroundColor: 'var(--color-brand-50)',
           }}
         >
           <div>
@@ -371,6 +375,7 @@ export const PushNotificationSettings: React.FC = () => {
         </label>
 
         <label
+          className="notification-channel-item"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -379,7 +384,7 @@ export const PushNotificationSettings: React.FC = () => {
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--color-line)',
             cursor: 'pointer',
-            backgroundColor: '#FAFAFB',
+            backgroundColor: 'var(--color-brand-50)',
           }}
         >
           <div>

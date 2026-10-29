@@ -321,7 +321,7 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
                               padding: '4px 10px',
                               borderRadius: 'var(--radius-pill)',
                               border: '1px solid var(--color-line)',
-                              backgroundColor: '#FFFFFF',
+                              backgroundColor: 'var(--color-surface)',
                               color: 'var(--color-brand-700)',
                               fontSize: '11px',
                               fontWeight: 600,
@@ -381,8 +381,9 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
             <div
               className="animate-slide-up"
               style={{
-                backgroundColor: '#FFFFFF',
+                backgroundColor: 'var(--color-surface)',
                 borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-line)',
                 padding: '24px',
                 width: '100%',
                 maxWidth: '420px',
@@ -486,8 +487,9 @@ export const CoordinatorAttendanceManagement: React.FC = () => {
             <div
               className="animate-slide-up"
               style={{
-                backgroundColor: '#FFFFFF',
+                backgroundColor: 'var(--color-surface)',
                 borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-line)',
                 padding: '24px',
                 width: '100%',
                 maxWidth: '440px',

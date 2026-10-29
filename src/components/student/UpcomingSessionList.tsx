@@ -16,7 +16,7 @@ export const UpcomingSessionList: React.FC<UpcomingSessionListProps> = ({ sessio
         style={{
           padding: '24px',
           textAlign: 'center',
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'var(--color-surface)',
           borderRadius: 'var(--radius-sm)',
           border: '1px solid var(--color-line)',
         }}
@@ -39,7 +39,7 @@ export const UpcomingSessionList: React.FC<UpcomingSessionListProps> = ({ sessio
           key={session.id}
           onClick={() => onSelectSession(session)}
           style={{
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--color-surface)',
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--color-line)',
             padding: '12px 14px',

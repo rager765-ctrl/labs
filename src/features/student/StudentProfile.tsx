@@ -98,8 +98,9 @@ export const StudentProfile: React.FC = () => {
 
         {/* Student ID Card */}
         <div
+          className="card"
           style={{
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--color-surface)',
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--color-line)',
             padding: '20px',
@@ -110,7 +111,7 @@ export const StudentProfile: React.FC = () => {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '14px' }}>
-            <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0 }}>Attendee ID Card</h2>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--color-ink-900)' }}>Attendee ID Card</h2>
             <button type="button" className="btn-secondary" onClick={toggleProfileEditor} style={{ height: '36px', padding: '0 12px', gap: '6px' }}>
               {editingProfile ? <X size={15} /> : <Pencil size={15} />}
               <span>{editingProfile ? 'Cancel' : 'Edit details'}</span>
@@ -131,6 +132,7 @@ export const StudentProfile: React.FC = () => {
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div
+              className="student-avatar-box"
               style={{
                 width: '56px',
                 height: '56px',
@@ -160,6 +162,7 @@ export const StudentProfile: React.FC = () => {
                   {currentUser?.name || 'Attendee Account'}
                 </h2>
                 <span
+                  className="role-badge"
                   style={{
                     backgroundColor: 'var(--color-brand-100)',
                     color: 'var(--color-brand-700)',
@@ -208,8 +211,9 @@ export const StudentProfile: React.FC = () => {
 
         {/* Account & Session Section */}
         <div
+          className="card"
           style={{
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--color-surface)',
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--color-line)',
             padding: '16px',

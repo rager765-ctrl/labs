@@ -331,7 +331,7 @@ export const CoordinatorDashboard: React.FC = () => {
               }}
               style={{
                 padding: '6px 14px',
-                backgroundColor: '#FFFFFF',
+                backgroundColor: 'var(--color-surface)',
                 color: 'var(--color-warning-700)',
                 border: '1px solid #FDBA74',
                 borderRadius: 'var(--radius-pill)',

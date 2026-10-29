@@ -57,7 +57,7 @@ export const CoordinatorSessionList: React.FC = () => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              backgroundColor: '#FFFFFF',
+              backgroundColor: 'var(--color-surface)',
               borderRadius: 'var(--radius-pill)',
               border: '1px solid var(--color-line)',
               padding: '0 16px',
@@ -301,7 +301,7 @@ export const CoordinatorSessionList: React.FC = () => {
                           height: '36px',
                           borderRadius: 'var(--radius-pill)',
                           border: '1px solid var(--color-line)',
-                          backgroundColor: '#FFFFFF',
+                          backgroundColor: 'var(--color-surface)',
                           color: 'var(--color-ink-900)',
                           fontSize: '12px',
                           fontWeight: 600,

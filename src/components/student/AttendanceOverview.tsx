@@ -23,7 +23,7 @@ export const AttendanceOverview: React.FC<AttendanceOverviewProps> = ({ metrics 
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '10px 14px',
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'var(--color-surface)',
           borderRadius: 'var(--radius-sm)',
           border: '1px solid var(--color-line)',
         }}
@@ -56,7 +56,7 @@ export const AttendanceOverview: React.FC<AttendanceOverviewProps> = ({ metrics 
               fontSize: '11px',
               fontWeight: 600,
               color: metrics.total === 0 ? 'var(--color-ink-500)' : metrics.rate >= 75 ? 'var(--color-success-700)' : 'var(--color-danger-700)',
-              backgroundColor: metrics.total === 0 ? 'rgba(0,0,0,0.05)' : metrics.rate >= 75 ? 'var(--color-success-100)' : '#FDECEE',
+              backgroundColor: metrics.total === 0 ? 'rgba(0,0,0,0.05)' : metrics.rate >= 75 ? 'var(--color-success-100)' : 'var(--color-danger-100)',
               padding: '2px 8px',
               borderRadius: 'var(--radius-pill)',
             }}
@@ -77,7 +77,7 @@ export const AttendanceOverview: React.FC<AttendanceOverviewProps> = ({ metrics 
         {/* Attended */}
         <div
           style={{
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--color-surface)',
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--color-line)',
             padding: '12px',
@@ -113,7 +113,7 @@ export const AttendanceOverview: React.FC<AttendanceOverviewProps> = ({ metrics 
         {/* Late */}
         <div
           style={{
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--color-surface)',
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--color-line)',
             padding: '12px',
@@ -149,7 +149,7 @@ export const AttendanceOverview: React.FC<AttendanceOverviewProps> = ({ metrics 
         {/* Missed */}
         <div
           style={{
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--color-surface)',
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--color-line)',
             padding: '12px',
@@ -164,7 +164,7 @@ export const AttendanceOverview: React.FC<AttendanceOverviewProps> = ({ metrics 
               width: '28px',
               height: '28px',
               borderRadius: 'var(--radius-xs)',
-              backgroundColor: '#FDECEE',
+              backgroundColor: 'var(--color-danger-100)',
               color: 'var(--color-danger-700)',
               display: 'flex',
               alignItems: 'center',

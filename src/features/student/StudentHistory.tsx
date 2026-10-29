@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { StudentBottomNav } from '../../components/student/StudentBottomNav';
@@ -123,7 +123,7 @@ export const StudentHistory: React.FC = () => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              backgroundColor: '#FFFFFF',
+              backgroundColor: 'var(--color-surface)',
               borderRadius: 'var(--radius-pill)',
               border: '1px solid var(--color-line)',
               padding: '0 14px',
@@ -217,7 +217,7 @@ export const StudentHistory: React.FC = () => {
 
         {/* Filter-responsive attendance analytics */}
         <section aria-label="Attendance analytics">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', minHeight: '44px', padding: '6px 10px', backgroundColor: '#FFFFFF', border: '1px solid var(--color-line)', borderRadius: 'var(--radius-sm)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', minHeight: '44px', padding: '6px 10px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-line)', borderRadius: 'var(--radius-sm)' }}>
             <h2 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-ink-900)', margin: 0 }}>Attendance Analytics</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {metrics.total > 0 && <span style={{ fontSize: '11px', color: 'var(--color-brand-700)', fontWeight: 700 }}>{metrics.rate}%</span>}
@@ -248,7 +248,7 @@ export const StudentHistory: React.FC = () => {
               style={{
                 padding: '36px 20px',
                 textAlign: 'center',
-                backgroundColor: '#FFFFFF',
+                backgroundColor: 'var(--color-surface)',
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--color-line)',
               }}
@@ -277,7 +277,7 @@ export const StudentHistory: React.FC = () => {
                 <div
                   key={record.id}
                   style={{
-                    backgroundColor: '#FFFFFF',
+                    backgroundColor: 'var(--color-surface)',
                     borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--color-line)',
                     padding: '14px',
@@ -425,8 +425,9 @@ export const StudentHistory: React.FC = () => {
           <div
             className="animate-slide-up"
             style={{
-              backgroundColor: '#FFFFFF',
+              backgroundColor: 'var(--color-surface)',
               borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-line)',
               padding: '20px',
               width: '100%',
               maxWidth: '400px',

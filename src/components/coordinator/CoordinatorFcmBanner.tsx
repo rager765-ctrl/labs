@@ -100,7 +100,7 @@ export const CoordinatorFcmBanner: React.FC = () => {
         style={{
           padding: '16px 20px',
           marginBottom: '22px',
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'var(--color-surface)',
           border: isSubscribed ? '1px solid var(--color-brand-200)' : '1px solid var(--color-line)',
           borderRadius: 'var(--radius-md, 10px)',
           boxShadow: 'var(--shadow-card)',

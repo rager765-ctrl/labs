@@ -43,7 +43,7 @@ export const CheckInActionCard: React.FC<CheckInActionCardProps> = ({
       style={{
         padding: '16px',
         border: '1px solid var(--color-line)',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'var(--color-surface)',
       }}
     >
       {/* Session Title & Badge */}

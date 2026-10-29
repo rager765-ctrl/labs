@@ -98,8 +98,9 @@ export const StudentSessionDetail: React.FC = () => {
 
         {/* Main Session Card */}
         <div
+          className="card"
           style={{
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--color-surface)',
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--color-line)',
             padding: '20px',
@@ -228,8 +229,9 @@ export const StudentSessionDetail: React.FC = () => {
 
         {/* Attendance Status & Actions Card */}
         <div
+          className="card"
           style={{
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--color-surface)',
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--color-line)',
             padding: '18px',
@@ -240,7 +242,7 @@ export const StudentSessionDetail: React.FC = () => {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0 }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--color-ink-900)' }}>
               Your Attendance Status
             </h2>
             {studentRecord && <StatusBadge status={studentRecord.status} size="sm" />}
@@ -375,8 +377,9 @@ export const StudentSessionDetail: React.FC = () => {
         {/* Audit Trail if present */}
         {studentRecord?.audit && studentRecord.audit.length > 0 && (
           <div
+            className="card"
             style={{
-              backgroundColor: '#FFFFFF',
+              backgroundColor: 'var(--color-surface)',
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--color-line)',
               padding: '16px',
@@ -415,15 +418,17 @@ export const StudentSessionDetail: React.FC = () => {
             <div
               className="animate-slide-up"
               style={{
-                backgroundColor: '#FFFFFF',
+                backgroundColor: 'var(--color-surface)',
                 borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-line)',
                 padding: '20px',
                 width: '100%',
                 maxWidth: '400px',
+                boxShadow: 'var(--shadow-sheet)',
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 6px 0' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 6px 0', color: 'var(--color-ink-900)' }}>
                 Request Correction
               </h3>
               <form onSubmit={handleSubmitCorrection} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
