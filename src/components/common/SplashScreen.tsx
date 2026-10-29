@@ -11,16 +11,12 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   message = 'Connecting to LabAttend...',
 }) => {
   return (
-    <div
-      className="splash-screen"
-      role="status"
-      aria-live="polite"
-      style={{
-        backgroundImage: `url("${splashBackground}")`,
-        backgroundPosition: 'center',
-        backgroundSize: 'cover',
-      }}
-    >
+    <div className="splash-screen" role="status" aria-live="polite">
+      <div
+        className="splash-screen__backdrop"
+        style={{ backgroundImage: `url("${splashBackground}")` }}
+        aria-hidden="true"
+      />
       <div className="splash-screen__content">
         {/* Brand Icon with glowing ring */}
         <div className="splash-screen__icon-wrap">
