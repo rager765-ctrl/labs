@@ -1,5 +1,5 @@
 import { getToken, onMessage } from 'firebase/messaging';
-import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { initMessaging, db } from './firebase';
 import type { LabSession } from '../types';
 
@@ -85,12 +85,22 @@ export async function requestAndSubscribePush(uid: string, role?: string): Promi
     if (db && uid) {
       try {
         const userRef = doc(db, 'users', uid);
-        await updateDoc(userRef, {
+        await setDoc(userRef, {
           fcmTokens: arrayUnion(currentToken),
           role: role || 'student',
           notificationsEnabled: true,
           fcmSubscribedAt: new Date().toISOString(),
-        });
+          lastActiveAt: new Date().toISOString(),
+        }, { merge: true });
+
+        // Backup in fcmTokens collection for fast lookup
+        const tokenDocRef = doc(db, 'fcmTokens', currentToken.slice(0, 64));
+        await setDoc(tokenDocRef, {
+          token: currentToken,
+          uid,
+          role: role || 'student',
+          createdAt: new Date().toISOString(),
+        }, { merge: true }).catch(() => {});
       } catch (err) {
         console.warn('Could not save FCM token directly to Firestore:', err);
       }
