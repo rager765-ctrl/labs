@@ -1157,15 +1157,28 @@ router.post('/cleanup-duplicates', async (req, res) => {
       const rawTokens = Array.isArray(data.fcmTokens) ? data.fcmTokens : [];
       const devices = data.devices || {};
 
-      const uniqueTokens = Array.from(new Set(rawTokens.filter(t => typeof t === 'string' && t.length > 10)));
+      let validTokens = Array.from(new Set(rawTokens.filter(t => typeof t === 'string' && t.length > 10)));
 
-      // If duplicates existed in fcmTokens or count differs
-      if (rawTokens.length !== uniqueTokens.length) {
-        prunedTokensCount += (rawTokens.length - uniqueTokens.length);
+      // If user has devices registered, fcmTokens should reflect exactly those active devices
+      const deviceKeys = Object.keys(devices);
+      if (deviceKeys.length > 0) {
+        const deviceTokens = Array.from(new Set(
+          Object.values(devices).map(d => d?.token).filter(t => typeof t === 'string' && t.length > 10)
+        ));
+        if (deviceTokens.length > 0) {
+          validTokens = deviceTokens;
+        }
+      } else if (validTokens.length > 1) {
+        // Legacy user with unmapped multiple tokens: keep only the latest active token
+        validTokens = validTokens.slice(-1);
+      }
+
+      if (rawTokens.length !== validTokens.length) {
+        prunedTokensCount += (rawTokens.length - validTokens.length);
         cleanedUsersCount++;
 
         await docSnap.ref.update({
-          fcmTokens: uniqueTokens,
+          fcmTokens: validTokens,
         });
       }
     }
