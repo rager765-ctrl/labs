@@ -188,6 +188,92 @@ export async function requestAndSubscribePush(uid: string, role?: string): Promi
 }
 
 /**
+ * Silently reconciles the active FCM device token with Firestore and the Backend.
+ * Never prompts the user; executes seamlessly in the background whenever:
+ * 1. App launches or user signs in
+ * 2. Window regains focus or reconnects to network
+ * 3. Server restarts or wakes up
+ */
+export async function autoReconcileFcmPush(uid: string, role?: string): Promise<{ success: boolean; token?: string }> {
+  if (!isPushNotificationSupported() || typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+    return { success: false };
+  }
+
+  if (!uid) return { success: false };
+
+  try {
+    const messaging = await initMessaging();
+    if (!messaging) return { success: false };
+
+    const swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+      scope: '/',
+    });
+
+    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || undefined;
+    const currentToken = await getToken(messaging, {
+      serviceWorkerRegistration: swRegistration,
+      vapidKey,
+    });
+
+    if (!currentToken) return { success: false };
+
+    const deviceId = getOrCreateDeviceId();
+    const deviceName = `${navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop'} (${navigator.platform || 'Browser'})`;
+
+    // Persist locally
+    localStorage.setItem(FCM_TOKEN_STORAGE_KEY, currentToken);
+    localStorage.setItem(FCM_SUBSCRIBED_KEY, 'true');
+
+    // 1. Reconcile with Firestore
+    if (db && uid) {
+      try {
+        const userRef = doc(db, 'users', uid);
+        const updatePayload: any = {
+          devices: {
+            [deviceId]: {
+              token: currentToken,
+              deviceName,
+              updatedAt: new Date().toISOString(),
+            },
+          },
+          fcmTokens: arrayUnion(currentToken),
+          notificationsEnabled: true,
+          lastActiveAt: new Date().toISOString(),
+        };
+        if (role) updatePayload.role = role;
+        await setDoc(userRef, updatePayload, { merge: true });
+      } catch (dbErr) {
+        console.warn('Auto-reconcile Firestore sync warning:', dbErr);
+      }
+    }
+
+    // 2. Reconcile with Backend
+    try {
+      const backendUrl = getBackendBaseUrl();
+      const registerPayload: any = {
+        uid,
+        token: currentToken,
+        deviceId,
+        deviceName,
+      };
+      if (role) registerPayload.role = role;
+      await fetch(`${backendUrl}/api/notifications/register-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(registerPayload),
+      });
+    } catch (backendErr) {
+      // Backend might be spinning up; will catch on next ping
+    }
+
+    return { success: true, token: currentToken };
+  } catch (err) {
+    console.warn('Auto-reconciliation error:', err);
+    return { success: false };
+  }
+}
+
+/**
  * Unsubscribes this specific device from push notifications without disabling other devices
  */
 export async function unsubscribePush(uid: string): Promise<{ success: boolean; error?: string }> {

@@ -14,6 +14,7 @@ import cors from 'cors';
 import healthRoutes from './routes/health.js';
 import notificationRoutes from './routes/notifications.js';
 import { startSelfPing } from './services/selfPingService.js';
+import { reconcilePushSubscriptions } from './services/reconciliationService.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -83,6 +84,11 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 
   // Initialize keep-alive self-ping for Render
   startSelfPing();
+
+  // Automatically reconcile all push subscribers and FCM topics from Firestore
+  reconcilePushSubscriptions().catch(err => {
+    console.warn('Initial push auto-reconciliation warning:', err.message);
+  });
 });
 
 // Graceful Shutdown

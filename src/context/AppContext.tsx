@@ -55,6 +55,7 @@ import {
   setupForegroundNotificationListener,
   triggerSystemNotification,
   pingBackendHealth,
+  autoReconcileFcmPush,
 } from '../services/fcmClientService';
 import type { AttendanceLocation } from '../types';
 
@@ -337,14 +338,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [addToast]);
 
-  // Client keep-alive ping for backend service on Render
+  // Seamless auto-reconciliation of FCM push subscription across server restarts, app launches, and network reconnects
   useEffect(() => {
-    pingBackendHealth().catch(() => {});
+    const uid = firebaseUser?.uid || state.currentUser?.id;
+    if (!uid) return;
+    const role = state.currentUser?.role || state.currentRole || 'student';
+
+    // 1. Initial silent reconciliation on user auth / state load
+    autoReconcileFcmPush(uid, role).catch(() => {});
+
+    // 2. Re-reconcile when window regains focus or comes back online
+    const handleSync = () => {
+      autoReconcileFcmPush(uid, role).catch(() => {});
+    };
+
+    window.addEventListener('focus', handleSync);
+    window.addEventListener('online', handleSync);
+
+    return () => {
+      window.removeEventListener('focus', handleSync);
+      window.removeEventListener('online', handleSync);
+    };
+  }, [firebaseUser?.uid, state.currentUser?.id, state.currentUser?.role, state.currentRole]);
+
+  // Client keep-alive ping for backend service on Render with automatic push resync
+  useEffect(() => {
+    const triggerReconcile = () => {
+      const uid = firebaseUser?.uid || stateRef.current.currentUser?.id;
+      const role = stateRef.current.currentUser?.role || stateRef.current.currentRole || 'student';
+      if (uid) {
+        autoReconcileFcmPush(uid, role).catch(() => {});
+      }
+    };
+
+    pingBackendHealth().then(res => {
+      if (res.healthy) triggerReconcile();
+    }).catch(() => {});
+
     const interval = setInterval(() => {
-      pingBackendHealth().catch(() => {});
+      pingBackendHealth().then(res => {
+        if (res.healthy) triggerReconcile();
+      }).catch(() => {});
     }, 10 * 60 * 1000);
+
     return () => clearInterval(interval);
-  }, []);
+  }, [firebaseUser?.uid]);
 
   // Close expired sessions and record roster members who never checked in. Coordinators reconcile
   // the full roster; students can also record their own missed status when their app is active.

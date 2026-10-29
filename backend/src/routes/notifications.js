@@ -14,6 +14,7 @@ import {
   shouldSendFcm,
   shouldSendEmail,
 } from '../services/configService.js';
+import { reconcilePushSubscriptions } from '../services/reconciliationService.js';
 
 const router = express.Router();
 
@@ -819,8 +820,9 @@ router.post('/session-alert', async (req, res) => {
     if (db) {
       try {
         if (Array.isArray(eligibleStudentIds) && eligibleStudentIds.length > 0) {
+          // 1. Check doc ID match
           const userDocs = await Promise.all(
-            eligibleStudentIds.slice(0, 100).map(id => db.collection('users').doc(id).get())
+            eligibleStudentIds.slice(0, 50).map(id => db.collection('users').doc(id).get())
           );
           userDocs.forEach(docSnap => {
             if (docSnap.exists) {
@@ -833,14 +835,29 @@ router.post('/session-alert', async (req, res) => {
               }
             }
           });
-        } else {
-          const allUsersSnap = await db.collection('users').get();
-          allUsersSnap.forEach(docSnap => {
+
+          // 2. Also check studentId field match
+          for (const sid of eligibleStudentIds.slice(0, 50)) {
+            const byStudentIdSnap = await db.collection('users').where('studentId', '==', sid).get();
+            byStudentIdSnap.forEach(d => {
+              const data = d.data();
+              if (Array.isArray(data.fcmTokens) && data.notificationsEnabled !== false) {
+                tokenList.push(...data.fcmTokens);
+              }
+              if (data.email) emailList.push(data.email);
+            });
+          }
+        }
+
+        // 3. Fallback: If tokenList is empty, gather ALL registered student tokens in Firestore
+        if (tokenList.length === 0) {
+          const allStudentsSnap = await db.collection('users').where('role', '==', 'student').get();
+          allStudentsSnap.forEach(docSnap => {
             const data = docSnap.data();
             if (Array.isArray(data.fcmTokens) && data.notificationsEnabled !== false) {
               tokenList.push(...data.fcmTokens);
             }
-            if (data.email && data.role === 'student') {
+            if (data.email && (!emailList.length || emailList.length < 50)) {
               emailList.push(data.email);
             }
           });
@@ -870,6 +887,7 @@ router.post('/session-alert', async (req, res) => {
     if (sendFcm && messaging) {
       const sessionTag = 'session-' + sessionId;
       const uniqueTokens = Array.from(new Set(tokenList));
+
       if (uniqueTokens.length > 0) {
         try {
           const response = await messaging.sendEachForMulticast({
@@ -903,21 +921,22 @@ router.post('/session-alert', async (req, res) => {
         } catch (fcmErr) {
           deliveryResults.fcm = { success: false, error: fcmErr.message };
         }
-      } else {
-        // Fallback to topic
-        try {
-          const topic = 'all-students';
-          const response = await messaging.send({
-            topic,
-            notification: { title, body },
-            data: { sessionId, targetUrl },
-            webpush: buildWebPushConfig(title, body, targetUrl, sessionTag),
-            android: ANDROID_PUSH_CONFIG,
-          });
-          deliveryResults.fcm = { success: true, mode: 'topic', messageId: response };
-        } catch (topicErr) {
-          deliveryResults.fcm = { success: false, error: topicErr.message };
+      }
+
+      // Also broadcast to 'all-students' topic as guaranteed delivery channel
+      try {
+        const topicResponse = await messaging.send({
+          topic: 'all-students',
+          notification: { title, body },
+          data: { sessionId, targetUrl },
+          webpush: buildWebPushConfig(title, body, targetUrl, sessionTag),
+          android: ANDROID_PUSH_CONFIG,
+        });
+        if (!deliveryResults.fcm) {
+          deliveryResults.fcm = { success: true, mode: 'topic', messageId: topicResponse };
         }
+      } catch (topicErr) {
+        console.warn('Topic broadcast failed or skipped:', topicErr.message);
       }
     }
 
@@ -1223,6 +1242,19 @@ router.post('/set-role', async (req, res) => {
     return res.json({ success: true, uid, role });
   } catch (error) {
     addLog('fail', `Failed to set user role: ${error.message}`);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/notifications/reconcile
+ * Trigger server auto-reconciliation of all tokens and topics from Firestore
+ */
+router.post('/reconcile', async (req, res) => {
+  try {
+    const result = await reconcilePushSubscriptions();
+    return res.json({ success: true, ...result });
+  } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
