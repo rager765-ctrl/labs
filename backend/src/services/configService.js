@@ -1,5 +1,5 @@
 import { db } from '../config/firebase.js';
-import { isEmailConfigured } from './emailService.js';
+import { isEmailConfigured, getSenderEmail } from './emailService.js';
 import { isFirebaseInitialized } from '../config/firebase.js';
 
 const DEFAULT_CONFIG = {
@@ -23,6 +23,7 @@ export async function getNotificationConfig() {
   if (now - lastFetchedAt < CACHE_TTL_MS && cachedConfig) {
     return {
       ...cachedConfig,
+      fromEmail: getSenderEmail(),
       resendReady: isEmailConfigured(),
       firebaseReady: isFirebaseInitialized,
     };
@@ -49,6 +50,7 @@ export async function getNotificationConfig() {
 
   return {
     ...cachedConfig,
+    fromEmail: getSenderEmail(),
     resendReady: isEmailConfigured(),
     firebaseReady: isFirebaseInitialized,
   };
@@ -81,6 +83,7 @@ export async function updateNotificationConfig(updates) {
 
   return {
     ...newConfig,
+    fromEmail: getSenderEmail(),
     resendReady: isEmailConfigured(),
     firebaseReady: isFirebaseInitialized,
   };

@@ -157,10 +157,9 @@ export async function sendSessionAlertEmail({
   `;
 
   const results = [];
-  // Resend allows sending batch or individual
   for (const email of validRecipients) {
     try {
-      const resp = await client.emails.send({
+      const { data, error } = await client.emails.send({
         from: getSenderEmail(),
         to: email,
         subject: title,
@@ -169,17 +168,38 @@ export async function sendSessionAlertEmail({
           url: appUrl,
         }),
       });
-      results.push({ email, success: true, id: resp.data?.id });
+
+      if (error) {
+        const errorMsg = error.message || JSON.stringify(error);
+        results.push({ email, success: false, error: errorMsg, code: error.name || error.statusCode });
+        addLog('fail', `Resend Email failed for ${email}: ${errorMsg}`, {
+          email,
+          error,
+          from: getSenderEmail(),
+        });
+      } else {
+        results.push({ email, success: true, id: data?.id });
+        addLog('success', `Resend Email delivered to ${email}. MessageId: ${data?.id}`, {
+          email,
+          messageId: data?.id,
+          from: getSenderEmail(),
+        });
+      }
     } catch (err) {
       results.push({ email, success: false, error: err.message });
+      addLog('fail', `Resend Email exception for ${email}: ${err.message}`, {
+        email,
+        error: err.message,
+        from: getSenderEmail(),
+      });
     }
   }
 
   const successCount = results.filter(r => r.success).length;
   addLog(
-    successCount > 0 ? 'success' : 'fail',
-    `Resend Email: Sent session alert to ${successCount}/${validRecipients.length} recipients for "${sessionTitle}"`,
-    { alertType, sessionTitle, results }
+    successCount > 0 ? (successCount === validRecipients.length ? 'success' : 'fail') : 'fail',
+    `Resend Email: Delivered ${successCount}/${validRecipients.length} recipients for "${sessionTitle}"`,
+    { alertType, sessionTitle, from: getSenderEmail(), results }
   );
 
   return { success: successCount > 0, delivered: successCount, total: validRecipients.length, results };
@@ -233,7 +253,7 @@ export async function sendCorrectionDecisionEmail({
   `;
 
   try {
-    const resp = await client.emails.send({
+    const { data, error } = await client.emails.send({
       from: getSenderEmail(),
       to,
       subject: title,
@@ -243,16 +263,28 @@ export async function sendCorrectionDecisionEmail({
       }),
     });
 
-    addLog('success', `Resend Email: Correction decision sent to ${to} (${status})`, {
+    if (error) {
+      const errorMsg = error.message || JSON.stringify(error);
+      addLog('fail', `Resend Email: Failed sending correction decision to ${to}: ${errorMsg}`, {
+        to,
+        error,
+        from: getSenderEmail(),
+      });
+      return { success: false, error: errorMsg };
+    }
+
+    addLog('success', `Resend Email: Correction decision sent to ${to} (${status}). MessageId: ${data?.id}`, {
       to,
       status,
-      messageId: resp.data?.id,
+      messageId: data?.id,
+      from: getSenderEmail(),
     });
-    return { success: true, messageId: resp.data?.id };
+    return { success: true, messageId: data?.id };
   } catch (err) {
-    addLog('fail', `Resend Email: Failed sending correction decision to ${to}: ${err.message}`, {
+    addLog('fail', `Resend Email: Exception sending correction decision to ${to}: ${err.message}`, {
       to,
       error: err.message,
+      from: getSenderEmail(),
     });
     return { success: false, error: err.message };
   }
@@ -278,19 +310,30 @@ export async function sendTestEmail(toEmail) {
     </div>
   `;
 
-  const resp = await client.emails.send({
+  const { data, error } = await client.emails.send({
     from: getSenderEmail(),
     to: toEmail,
     subject: title,
     html: wrapHtml(title, preheader, bodyHtml),
   });
 
-  addLog('success', `Resend Email: Test email sent to ${toEmail}. MessageId: ${resp.data?.id}`, {
+  if (error) {
+    const errorMsg = error.message || JSON.stringify(error);
+    addLog('fail', `Resend Email: Test email to ${toEmail} rejected: ${errorMsg}`, {
+      to: toEmail,
+      error,
+      from: getSenderEmail(),
+    });
+    throw new Error(errorMsg);
+  }
+
+  addLog('success', `Resend Email: Test email sent to ${toEmail}. MessageId: ${data?.id}`, {
     to: toEmail,
-    messageId: resp.data?.id,
+    messageId: data?.id,
+    from: getSenderEmail(),
   });
 
-  return { success: true, messageId: resp.data?.id };
+  return { success: true, messageId: data?.id, from: getSenderEmail() };
 }
 
 /**
@@ -339,7 +382,7 @@ export async function sendCoordinatorAlertEmail({
   const results = [];
   for (const email of validRecipients) {
     try {
-      const resp = await client.emails.send({
+      const { data, error } = await client.emails.send({
         from: getSenderEmail(),
         to: email,
         subject: title,
@@ -348,17 +391,38 @@ export async function sendCoordinatorAlertEmail({
           url: `${appUrl}/coordinator`,
         }),
       });
-      results.push({ email, success: true, id: resp.data?.id });
+
+      if (error) {
+        const errorMsg = error.message || JSON.stringify(error);
+        results.push({ email, success: false, error: errorMsg, code: error.name || error.statusCode });
+        addLog('fail', `Resend Email: Coordinator alert to ${email} rejected: ${errorMsg}`, {
+          email,
+          error,
+          from: getSenderEmail(),
+        });
+      } else {
+        results.push({ email, success: true, id: data?.id });
+        addLog('success', `Resend Email: Coordinator alert delivered to ${email}. MessageId: ${data?.id}`, {
+          email,
+          messageId: data?.id,
+          from: getSenderEmail(),
+        });
+      }
     } catch (err) {
       results.push({ email, success: false, error: err.message });
+      addLog('fail', `Resend Email: Coordinator alert exception for ${email}: ${err.message}`, {
+        email,
+        error: err.message,
+        from: getSenderEmail(),
+      });
     }
   }
 
   const successCount = results.filter(r => r.success).length;
   addLog(
-    successCount > 0 ? 'success' : 'fail',
+    successCount > 0 ? (successCount === validRecipients.length ? 'success' : 'fail') : 'fail',
     `Resend Email: Sent coordinator alert (${type}) to ${successCount}/${validRecipients.length} coordinator(s)`,
-    { type, studentName, sessionTitle, results }
+    { type, studentName, sessionTitle, from: getSenderEmail(), results }
   );
 
   return { success: successCount > 0, delivered: successCount, total: validRecipients.length, results };

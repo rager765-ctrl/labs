@@ -392,6 +392,7 @@ export interface NotificationChannelConfig {
   channel: 'both' | 'fcm' | 'email';
   fcmEnabled: boolean;
   emailEnabled: boolean;
+  fromEmail?: string;
   resendReady?: boolean;
   firebaseReady?: boolean;
   events: {

@@ -925,10 +925,41 @@ export const FcmActivityModal: React.FC<FcmActivityModalProps> = ({ isOpen, onCl
                   <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--color-ink-900)' }}>
                     Resend Email Diagnostic Dispatch
                   </h3>
+                  {config.fromEmail && (
+                    <span style={{ fontSize: '11px', color: 'var(--color-ink-500)', marginLeft: 'auto' }}>
+                      Sender: <code style={{ backgroundColor: 'var(--color-ink-100)', padding: '2px 6px', borderRadius: '4px' }}>{config.fromEmail}</code>
+                    </span>
+                  )}
                 </div>
                 <p style={{ margin: '0 0 12px 0', fontSize: '12px', color: 'var(--color-ink-500)' }}>
                   Send an instant test email to verify your Resend API configuration and ensure inbox delivery.
                 </p>
+
+                {config.fromEmail?.includes('onboarding@resend.dev') && (
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '6px',
+                      backgroundColor: '#FEF3C7',
+                      border: '1px solid #FCD34D',
+                      color: '#92400E',
+                      fontSize: '11px',
+                      marginBottom: '12px',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px',
+                      lineHeight: '16px',
+                    }}
+                  >
+                    <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+                    <div>
+                      <strong>Important Resend Free-Tier Rule:</strong> Currently using the default sandbox sender <code>onboarding@resend.dev</code>. Resend only delivers emails to the specific email address associated with your Resend account.
+                      <div style={{ marginTop: '4px' }}>
+                        To deliver emails to any student email address, add and verify your custom domain in <a href="https://resend.com/domains" target="_blank" rel="noreferrer" style={{ color: '#1D4ED8', textDecoration: 'underline', fontWeight: 600 }}>resend.com/domains</a> and set <code>RESEND_FROM_EMAIL</code> on Render (e.g. <code>Innovations Lab &lt;noreply@yourdomain.com&gt;</code>).
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {!config.resendReady && (
                   <div
