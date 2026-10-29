@@ -387,3 +387,81 @@ export async function fetchNotificationSubscribers(): Promise<{ totalSubscribers
     return { totalSubscribers: 0, totalDevices: 0, subscribers: [] };
   }
 }
+
+export interface NotificationChannelConfig {
+  channel: 'both' | 'fcm' | 'email';
+  fcmEnabled: boolean;
+  emailEnabled: boolean;
+  resendReady?: boolean;
+  firebaseReady?: boolean;
+  events: {
+    sessionLive: { fcm: boolean; email: boolean };
+    sessionScheduled: { fcm: boolean; email: boolean };
+    checkInAlerts: { fcm: boolean; email: boolean };
+    correctionDecisions: { fcm: boolean; email: boolean };
+  };
+  updatedAt?: string;
+}
+
+/**
+ * Fetches notification delivery channel configuration and service readiness from backend
+ */
+export async function fetchNotificationChannelConfig(): Promise<NotificationChannelConfig | null> {
+  try {
+    const backendUrl = getBackendBaseUrl();
+    const res = await fetch(`${backendUrl}/api/notifications/config`, {
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.config || null;
+  } catch (err) {
+    console.warn('Could not fetch notification config:', err);
+    return null;
+  }
+}
+
+/**
+ * Updates notification delivery channel configuration on backend
+ */
+export async function updateNotificationChannelConfig(
+  updates: Partial<NotificationChannelConfig>
+): Promise<{ success: boolean; config?: NotificationChannelConfig; error?: string }> {
+  try {
+    const backendUrl = getBackendBaseUrl();
+    const res = await fetch(`${backendUrl}/api/notifications/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return { success: false, error: data.error || 'Failed to update notification configuration.' };
+    }
+    return { success: true, config: data.config };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error updating notification config.' };
+  }
+}
+
+/**
+ * Dispatches a test email via backend Resend integration
+ */
+export async function sendTestEmailAlert(email: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    const backendUrl = getBackendBaseUrl();
+    const res = await fetch(`${backendUrl}/api/notifications/test-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return { success: false, error: data.error || 'Failed to dispatch test email.' };
+    }
+    return { success: true, messageId: data.messageId };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error dispatching test email.' };
+  }
+}

@@ -1,6 +1,19 @@
 import express from 'express';
 import admin, { messaging, db, isFirebaseInitialized } from '../config/firebase.js';
 import { addLog, getLogs, clearLogs } from '../services/loggerService.js';
+import {
+  isEmailConfigured,
+  sendSessionAlertEmail,
+  sendCorrectionDecisionEmail,
+  sendCoordinatorAlertEmail,
+  sendTestEmail,
+} from '../services/emailService.js';
+import {
+  getNotificationConfig,
+  updateNotificationConfig,
+  shouldSendFcm,
+  shouldSendEmail,
+} from '../services/configService.js';
 
 const router = express.Router();
 
@@ -109,6 +122,52 @@ router.get('/subscribers', async (req, res) => {
 });
 
 /**
+ * GET /api/notifications/config
+ * Retrieves admin configuration for delivery channels (FCM vs Email)
+ */
+router.get('/config', async (req, res) => {
+  try {
+    const config = await getNotificationConfig();
+    return res.json({ success: true, config });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/notifications/config
+ * Updates admin configuration for delivery channels (FCM vs Email)
+ */
+router.post('/config', async (req, res) => {
+  try {
+    const updates = req.body || {};
+    const config = await updateNotificationConfig(updates);
+    addLog('info', `Notification channel config updated: mode="${config.channel}" (FCM: ${config.fcmEnabled}, Email: ${config.emailEnabled})`);
+    return res.json({ success: true, config });
+  } catch (error) {
+    addLog('fail', `Failed updating notification config: ${error.message}`);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/notifications/test-email
+ * Sends a test email to verify Resend configuration
+ */
+router.post('/test-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Recipient email is required.' });
+    }
+    const result = await sendTestEmail(email);
+    return res.json({ success: true, message: `Test email sent to ${email}`, messageId: result.messageId });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * POST /api/notifications/register-token
  * Saves an FCM device token for a student or coordinator in Firestore and subscribes to topic
  */
@@ -179,7 +238,7 @@ router.post('/register-token', requireFirebase, async (req, res) => {
  * POST /api/notifications/coordinator-alert
  * Dispatches an alert to coordinators when attendees check in, check out, or submit issues
  */
-router.post('/coordinator-alert', requireFirebase, async (req, res) => {
+router.post('/coordinator-alert', async (req, res) => {
   try {
     const {
       type, // 'checkin' | 'checkout' | 'correction_submitted' | 'issue_resolved'
@@ -190,6 +249,9 @@ router.post('/coordinator-alert', requireFirebase, async (req, res) => {
       status,
       reason,
     } = req.body;
+
+    const sendFcm = await shouldSendFcm('checkInAlerts');
+    const sendEmail = await shouldSendEmail('checkInAlerts');
 
     let title = 'Innovations Lab Alert';
     let body = 'New attendance event recorded.';
@@ -210,14 +272,20 @@ router.post('/coordinator-alert', requireFirebase, async (req, res) => {
       body = `Attendance issue for ${studentName || 'attendee'} was resolved (${status?.toUpperCase() || 'RESOLVED'}).`;
     }
 
-    addLog('dispatch', `Coordinator push alert dispatched: "${title}" (Event: ${type})`, {
+    addLog('dispatch', `Coordinator alert dispatched: "${title}" (Event: ${type}, FCM: ${sendFcm}, Email: ${sendEmail})`, {
       type,
       studentName,
       sessionTitle,
+      sendFcm,
+      sendEmail,
     });
 
-    // Find all coordinators with registered FCM tokens
+    const deliveryResults = { fcm: null, email: null };
+
+    // Find all coordinators with registered FCM tokens and emails
     const coordTokens = [];
+    const coordEmails = [];
+
     if (db) {
       try {
         const coordSnap = await db.collection('users').where('role', '==', 'coordinator').get();
@@ -226,54 +294,84 @@ router.post('/coordinator-alert', requireFirebase, async (req, res) => {
           if (Array.isArray(d.fcmTokens) && d.notificationsEnabled !== false) {
             coordTokens.push(...d.fcmTokens);
           }
+          if (d.email) {
+            coordEmails.push(d.email);
+          }
         });
       } catch (err) {
         console.warn('Error querying coordinators from Firestore:', err);
       }
     }
 
-    if (coordTokens.length > 0) {
-      const uniqueCoords = Array.from(new Set(coordTokens));
-      const response = await messaging.sendEachForMulticast({
-        tokens: uniqueCoords,
-        notification: { title, body },
-        data: { type: type || 'coordinator_alert', sessionId: sessionId || '', url },
-        webpush: buildWebPushConfig(title, body, url),
-      });
-
-      if (response.successCount > 0) {
-        addLog('success', `Delivered coordinator alert to ${response.successCount} coordinator device(s).`, {
+    // 1. Send Email if enabled
+    if (sendEmail && coordEmails.length > 0) {
+      try {
+        deliveryResults.email = await sendCoordinatorAlertEmail({
+          recipients: coordEmails,
           type,
-          successCount: response.successCount,
+          studentName,
+          sessionTitle,
+          status,
         });
+      } catch (emailErr) {
+        console.error('Error dispatching coordinator email alert:', emailErr);
+        deliveryResults.email = { success: false, error: emailErr.message };
       }
-
-      if (response.failureCount > 0) {
-        addLog('fail', `Failed to deliver coordinator alert to ${response.failureCount} coordinator device(s).`, {
-          type,
-          failureCount: response.failureCount,
-        });
-      }
-
-      return res.json({
-        success: true,
-        mode: 'multicast_coordinators',
-        delivered: response.successCount,
-        failed: response.failureCount,
-      });
     }
 
-    // Fallback: Send to 'coordinators' topic
-    const topic = 'coordinators';
-    const response = await messaging.send({
-      topic,
-      notification: { title, body },
-      data: { type: type || 'coordinator_alert', sessionId: sessionId || '', url },
-      webpush: buildWebPushConfig(title, body, url),
-    });
+    // 2. Send FCM if enabled
+    if (sendFcm && messaging) {
+      if (coordTokens.length > 0) {
+        const uniqueCoords = Array.from(new Set(coordTokens));
+        const response = await messaging.sendEachForMulticast({
+          tokens: uniqueCoords,
+          notification: { title, body },
+          data: { type: type || 'coordinator_alert', sessionId: sessionId || '', url },
+          webpush: buildWebPushConfig(title, body, url),
+        });
 
-    addLog('success', `Delivered coordinator alert via topic "${topic}". MessageId: ${response}`);
-    return res.json({ success: true, mode: 'topic_coordinators', messageId: response });
+        deliveryResults.fcm = {
+          success: response.successCount > 0,
+          delivered: response.successCount,
+          failed: response.failureCount,
+        };
+
+        if (response.successCount > 0) {
+          addLog('success', `Delivered coordinator alert to ${response.successCount} coordinator device(s).`, {
+            type,
+            successCount: response.successCount,
+          });
+        }
+
+        if (response.failureCount > 0) {
+          addLog('fail', `Failed to deliver coordinator alert to ${response.failureCount} coordinator device(s).`, {
+            type,
+            failureCount: response.failureCount,
+          });
+        }
+      } else {
+        // Fallback: Send to 'coordinators' topic
+        try {
+          const topic = 'coordinators';
+          const response = await messaging.send({
+            topic,
+            notification: { title, body },
+            data: { type: type || 'coordinator_alert', sessionId: sessionId || '', url },
+            webpush: buildWebPushConfig(title, body, url),
+          });
+          deliveryResults.fcm = { success: true, mode: 'topic_coordinators', messageId: response };
+          addLog('success', `Delivered coordinator alert via topic "${topic}". MessageId: ${response}`);
+        } catch (topicErr) {
+          deliveryResults.fcm = { success: false, error: topicErr.message };
+        }
+      }
+    }
+
+    return res.json({
+      success: true,
+      channels: { sendFcm, sendEmail },
+      results: deliveryResults,
+    });
   } catch (error) {
     addLog('fail', `Error dispatching coordinator alert: ${error.message}`);
     console.error('Error dispatching coordinator alert:', error);
@@ -500,9 +598,9 @@ router.post('/send-to-user', requireFirebase, async (req, res) => {
 
 /**
  * POST /api/notifications/session-alert
- * Dispatches an alert when a session goes live or is scheduled
+ * Dispatches an alert when a session goes live or is scheduled (via FCM and/or Resend Email)
  */
-router.post('/session-alert', requireFirebase, async (req, res) => {
+router.post('/session-alert', async (req, res) => {
   try {
     const {
       sessionId,
@@ -520,6 +618,10 @@ router.post('/session-alert', requireFirebase, async (req, res) => {
       });
     }
 
+    const eventKey = alertType === 'session_live' ? 'sessionLive' : 'sessionScheduled';
+    const sendFcm = await shouldSendFcm(eventKey);
+    const sendEmail = await shouldSendEmail(eventKey);
+
     const title = alertType === 'session_live' ? `🔴 Live Session: ${sessionTitle}` : `📅 Scheduled Session: ${sessionTitle}`;
     const body = alertType === 'session_live'
       ? `Check-in is now open at ${room || 'the lab'}. Tap to scan or verify your attendance.`
@@ -527,42 +629,248 @@ router.post('/session-alert', requireFirebase, async (req, res) => {
 
     const targetUrl = `/student/sessions/${sessionId}`;
 
-    addLog('dispatch', `Session push alert initiated: "${title}" (Mode: ${alertType})`, {
+    addLog('dispatch', `Session alert initiated: "${title}" (Mode: ${alertType}, FCM: ${sendFcm}, Email: ${sendEmail})`, {
       sessionId,
       sessionTitle,
       alertType,
       room,
+      sendFcm,
+      sendEmail,
     });
 
-    // 1. If specific eligible student IDs provided, look up their tokens
-    if (Array.isArray(eligibleStudentIds) && eligibleStudentIds.length > 0 && db) {
-      const tokenList = [];
-      const userDocs = await Promise.all(
-        eligibleStudentIds.slice(0, 100).map(id => db.collection('users').doc(id).get())
-      );
+    const deliveryResults = { fcm: null, email: null };
 
-      userDocs.forEach(docSnap => {
-        if (docSnap.exists) {
-          const data = docSnap.data();
-          if (Array.isArray(data.fcmTokens) && data.notificationsEnabled !== false) {
-            tokenList.push(...data.fcmTokens);
+    // Gather recipients from Firestore if available
+    let tokenList = [];
+    let emailList = [];
+
+    if (db) {
+      try {
+        if (Array.isArray(eligibleStudentIds) && eligibleStudentIds.length > 0) {
+          const userDocs = await Promise.all(
+            eligibleStudentIds.slice(0, 100).map(id => db.collection('users').doc(id).get())
+          );
+          userDocs.forEach(docSnap => {
+            if (docSnap.exists) {
+              const data = docSnap.data();
+              if (Array.isArray(data.fcmTokens) && data.notificationsEnabled !== false) {
+                tokenList.push(...data.fcmTokens);
+              }
+              if (data.email) {
+                emailList.push(data.email);
+              }
+            }
+          });
+        } else {
+          const allUsersSnap = await db.collection('users').get();
+          allUsersSnap.forEach(docSnap => {
+            const data = docSnap.data();
+            if (Array.isArray(data.fcmTokens) && data.notificationsEnabled !== false) {
+              tokenList.push(...data.fcmTokens);
+            }
+            if (data.email && data.role === 'student') {
+              emailList.push(data.email);
+            }
+          });
+        }
+      } catch (dbErr) {
+        console.warn('Could not query users from Firestore for session alert:', dbErr.message);
+      }
+    }
+
+    // 1. Dispatch Email via Resend if enabled
+    if (sendEmail && emailList.length > 0) {
+      try {
+        deliveryResults.email = await sendSessionAlertEmail({
+          recipients: emailList,
+          sessionTitle,
+          room,
+          coordinatorName,
+          alertType,
+        });
+      } catch (emailErr) {
+        console.error('Error sending session alert email:', emailErr);
+        deliveryResults.email = { success: false, error: emailErr.message };
+      }
+    }
+
+    // 2. Dispatch FCM Push if enabled
+    if (sendFcm && messaging) {
+      const uniqueTokens = Array.from(new Set(tokenList));
+      if (uniqueTokens.length > 0) {
+        try {
+          const response = await messaging.sendEachForMulticast({
+            tokens: uniqueTokens,
+            notification: { title, body },
+            data: { sessionId, targetUrl },
+            webpush: buildWebPushConfig(title, body, targetUrl),
+          });
+
+          deliveryResults.fcm = {
+            success: response.successCount > 0,
+            delivered: response.successCount,
+            failed: response.failureCount,
+          };
+
+          if (response.successCount > 0) {
+            addLog('success', `Delivered session alert to ${response.successCount} subscriber device(s).`, {
+              sessionId,
+              successCount: response.successCount,
+            });
+          }
+
+          if (response.failureCount > 0) {
+            addLog('fail', `Session alert multicast failed for ${response.failureCount} device(s).`, {
+              sessionId,
+              failureCount: response.failureCount,
+            });
+          }
+        } catch (fcmErr) {
+          deliveryResults.fcm = { success: false, error: fcmErr.message };
+        }
+      } else {
+        // Fallback to topic
+        try {
+          const topic = 'all-students';
+          const response = await messaging.send({
+            topic,
+            notification: { title, body },
+            data: { sessionId, targetUrl },
+            webpush: buildWebPushConfig(title, body, targetUrl),
+          });
+          deliveryResults.fcm = { success: true, mode: 'topic', messageId: response };
+        } catch (topicErr) {
+          deliveryResults.fcm = { success: false, error: topicErr.message };
+        }
+      }
+    }
+
+    return res.json({
+      success: true,
+      channels: { sendFcm, sendEmail },
+      results: deliveryResults,
+    });
+  } catch (error) {
+    addLog('fail', `Session alert dispatch failed with error: ${error.message}`, {
+      sessionId: req.body?.sessionId,
+      error: error.message,
+    });
+    console.error('Error dispatching session alert:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to dispatch session alert',
+    });
+  }
+});
+
+/**
+ * POST /api/notifications/correction-alert
+ * Dispatches an alert when a coordinator approves, rejects, or resolves an attendance correction
+ */
+router.post('/correction-alert', async (req, res) => {
+  try {
+    const { studentId, sessionTitle, status, decisionReason } = req.body;
+
+    if (!studentId || !sessionTitle || !status) {
+      return res.status(400).json({
+        success: false,
+        error: 'Fields "studentId", "sessionTitle", and "status" are required.',
+      });
+    }
+
+    const sendFcm = await shouldSendFcm('correctionDecisions');
+    const sendEmail = await shouldSendEmail('correctionDecisions');
+
+    const title = `Correction ${status === 'approved' ? 'Approved ✅' : status === 'resolved' ? 'Resolved ✅' : 'Rejected ❌'}`;
+    const body = `Your attendance correction for "${sessionTitle}" was ${status}.${decisionReason ? ` Note: ${decisionReason}` : ''}`;
+
+    addLog('dispatch', `Correction alert initiated for student ${studentId}: "${title}" (FCM: ${sendFcm}, Email: ${sendEmail})`, {
+      studentId,
+      sessionTitle,
+      status,
+      decisionReason,
+      sendFcm,
+      sendEmail,
+    });
+
+    const deliveryResults = { fcm: null, email: null };
+
+    let tokens = [];
+    let studentEmail = null;
+    let studentName = null;
+
+    if (db) {
+      try {
+        const userDoc = await db.collection('users').doc(studentId).get();
+        if (userDoc.exists) {
+          const data = userDoc.data();
+          tokens = data?.fcmTokens || [];
+          studentEmail = data?.email || null;
+          studentName = data?.name || data?.displayName || null;
+        } else {
+          // Query by studentId or id
+          const querySnap = await db.collection('users').where('studentId', '==', studentId).get();
+          if (!querySnap.empty) {
+            const data = querySnap.docs[0].data();
+            tokens = data?.fcmTokens || [];
+            studentEmail = data?.email || null;
+            studentName = data?.name || data?.displayName || null;
+          } else {
+            const queryIdSnap = await db.collection('users').where('id', '==', studentId).get();
+            if (!queryIdSnap.empty) {
+              const data = queryIdSnap.docs[0].data();
+              tokens = data?.fcmTokens || [];
+              studentEmail = data?.email || null;
+              studentName = data?.name || data?.displayName || null;
+            }
           }
         }
-      });
+      } catch (err) {
+        console.warn('Error reading student profile for correction alert:', err.message);
+      }
+    }
 
-      if (tokenList.length > 0) {
-        const uniqueTokens = Array.from(new Set(tokenList));
+    // 1. Dispatch Email via Resend if enabled
+    if (sendEmail && studentEmail) {
+      try {
+        deliveryResults.email = await sendCorrectionDecisionEmail({
+          to: studentEmail,
+          studentName,
+          sessionTitle,
+          status,
+          decisionReason,
+        });
+      } catch (emailErr) {
+        console.error('Error dispatching correction decision email:', emailErr);
+        deliveryResults.email = { success: false, error: emailErr.message };
+      }
+    }
+
+    // 2. Dispatch FCM Push if enabled
+    if (sendFcm && messaging) {
+      if (!tokens.length) {
+        addLog('info', `Correction alert: Student "${studentId}" has no registered FCM tokens.`, { studentId });
+        deliveryResults.fcm = { success: false, message: 'Student has no active FCM tokens.', sentCount: 0 };
+      } else {
+        const uniqueTokens = Array.from(new Set(tokens));
         const response = await messaging.sendEachForMulticast({
           tokens: uniqueTokens,
           notification: { title, body },
-          data: { sessionId, targetUrl },
-          webpush: buildWebPushConfig(title, body, targetUrl),
+          data: { type: 'correction_update', status },
+          webpush: buildWebPushConfig(title, body, '/student/history'),
         });
 
+        deliveryResults.fcm = {
+          success: response.successCount > 0,
+          delivered: response.successCount,
+          failed: response.failureCount,
+        };
+
         if (response.successCount > 0) {
-          addLog('success', `Delivered session alert to ${response.successCount} eligible attendee(s).`, {
-            sessionId,
-            successCount: response.successCount,
+          addLog('success', `Delivered correction alert to ${response.successCount} device(s) for student ${studentId}.`, {
+            studentId,
+            status,
+            delivered: response.successCount,
           });
         }
 
@@ -577,205 +885,19 @@ router.post('/session-alert', requireFirebase, async (req, res) => {
               });
             }
           });
-          addLog('fail', `Session alert failed for ${response.failureCount} eligible recipient(s)!`, {
-            sessionId,
+          addLog('fail', `Failed to deliver correction alert to ${response.failureCount} device(s) for student ${studentId}!`, {
+            studentId,
             failureCount: response.failureCount,
             failures,
           });
         }
-
-        return res.json({
-          success: true,
-          mode: 'multicast_eligible',
-          delivered: response.successCount,
-          failed: response.failureCount,
-        });
       }
-    }
-
-    // 2. Broadcast to all subscribed attendees with active tokens in Firestore
-    if (db) {
-      try {
-        const allUsersSnap = await db.collection('users').get();
-        const allTokens = [];
-        allUsersSnap.forEach(d => {
-          const udata = d.data();
-          if (Array.isArray(udata.fcmTokens) && udata.notificationsEnabled !== false) {
-            allTokens.push(...udata.fcmTokens);
-          }
-        });
-
-        if (allTokens.length > 0) {
-          const uniqueAll = Array.from(new Set(allTokens));
-          const response = await messaging.sendEachForMulticast({
-            tokens: uniqueAll,
-            notification: { title, body },
-            data: { sessionId, targetUrl },
-            webpush: buildWebPushConfig(title, body, targetUrl),
-          });
-
-          if (response.successCount > 0) {
-            addLog('success', `Delivered session alert to ${response.successCount} subscriber device(s).`, {
-              sessionId,
-              successCount: response.successCount,
-            });
-          }
-
-          if (response.failureCount > 0) {
-            const failures = [];
-            response.responses.forEach((resp, idx) => {
-              if (!resp.success) {
-                failures.push({
-                  tokenPreview: `${uniqueAll[idx]?.slice(0, 16)}...`,
-                  code: resp.error?.code,
-                  message: resp.error?.message,
-                });
-              }
-            });
-            addLog('fail', `Session alert multicast failed for ${response.failureCount} device(s)!`, {
-              sessionId,
-              failureCount: response.failureCount,
-              failures,
-            });
-          }
-
-          return res.json({
-            success: true,
-            mode: 'multicast_all',
-            delivered: response.successCount,
-            failed: response.failureCount,
-          });
-        }
-      } catch (err) {
-        addLog('fail', `Could not multicast to all users: ${err.message}`, { error: err.message });
-        console.warn('Could not multicast to all users from Firestore:', err);
-      }
-    }
-
-    // 3. Fallback: Broadcast to general topic 'all-students'
-    const topic = 'all-students';
-    const response = await messaging.send({
-      topic,
-      notification: { title, body },
-      data: { sessionId, targetUrl },
-      webpush: buildWebPushConfig(title, body, targetUrl),
-    });
-
-    addLog('success', `Broadcasted session alert to topic '${topic}'. Message ID: ${response}`, {
-      topic,
-      messageId: response,
-    });
-
-    return res.json({
-      success: true,
-      mode: 'topic',
-      messageId: response,
-    });
-  } catch (error) {
-    addLog('fail', `Session alert dispatch failed with error: ${error.message}`, {
-      sessionId: req.body?.sessionId,
-      error: error.message,
-      code: error.code,
-    });
-    console.error('Error dispatching session alert:', error);
-    return res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to dispatch session alert',
-    });
-  }
-});
-
-/**
- * POST /api/notifications/correction-alert
- * Dispatches an alert when a coordinator approves, rejects, or resolves an attendance correction
- */
-router.post('/correction-alert', requireFirebase, async (req, res) => {
-  try {
-    const { studentId, sessionTitle, status, decisionReason } = req.body;
-
-    if (!studentId || !sessionTitle || !status) {
-      return res.status(400).json({
-        success: false,
-        error: 'Fields "studentId", "sessionTitle", and "status" are required.',
-      });
-    }
-
-    const title = `Correction ${status === 'approved' ? 'Approved ✅' : status === 'resolved' ? 'Resolved ✅' : 'Rejected ❌'}`;
-    const body = `Your attendance correction for "${sessionTitle}" was ${status}.${decisionReason ? ` Note: ${decisionReason}` : ''}`;
-
-    addLog('dispatch', `Correction alert initiated for student ${studentId}: "${title}"`, {
-      studentId,
-      sessionTitle,
-      status,
-      decisionReason,
-    });
-
-    if (!db) {
-      return res.status(500).json({ success: false, error: 'Database not initialized.' });
-    }
-
-    let tokens = [];
-    const userDoc = await db.collection('users').doc(studentId).get();
-    if (userDoc.exists) {
-      tokens = userDoc.data()?.fcmTokens || [];
-    } else {
-      // Query by studentId or id
-      const querySnap = await db.collection('users').where('studentId', '==', studentId).get();
-      if (!querySnap.empty) {
-        querySnap.forEach(d => {
-          tokens.push(...(d.data()?.fcmTokens || []));
-        });
-      } else {
-        const queryIdSnap = await db.collection('users').where('id', '==', studentId).get();
-        queryIdSnap.forEach(d => {
-          tokens.push(...(d.data()?.fcmTokens || []));
-        });
-      }
-    }
-
-    if (!tokens.length) {
-      addLog('info', `Correction alert: Student "${studentId}" has no registered FCM tokens.`, { studentId });
-      return res.json({ success: false, message: 'Student has no active FCM tokens.', sentCount: 0 });
-    }
-
-    const uniqueTokens = Array.from(new Set(tokens));
-    const response = await messaging.sendEachForMulticast({
-      tokens: uniqueTokens,
-      notification: { title, body },
-      data: { type: 'correction_update', status },
-      webpush: buildWebPushConfig(title, body, '/student/history'),
-    });
-
-    if (response.successCount > 0) {
-      addLog('success', `Delivered correction alert to ${response.successCount} device(s) for student ${studentId}.`, {
-        studentId,
-        status,
-        delivered: response.successCount,
-      });
-    }
-
-    if (response.failureCount > 0) {
-      const failures = [];
-      response.responses.forEach((resp, idx) => {
-        if (!resp.success) {
-          failures.push({
-            tokenPreview: `${uniqueTokens[idx]?.slice(0, 16)}...`,
-            code: resp.error?.code,
-            message: resp.error?.message,
-          });
-        }
-      });
-      addLog('fail', `Failed to deliver correction alert to ${response.failureCount} device(s) for student ${studentId}!`, {
-        studentId,
-        failureCount: response.failureCount,
-        failures,
-      });
     }
 
     return res.json({
       success: true,
-      delivered: response.successCount,
-      failed: response.failureCount,
+      channels: { sendFcm, sendEmail },
+      results: deliveryResults,
     });
   } catch (error) {
     addLog('fail', `Correction alert dispatch error: ${error.message}`, {

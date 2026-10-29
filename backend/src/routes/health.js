@@ -1,6 +1,7 @@
 import express from 'express';
 import { isFirebaseInitialized } from '../config/firebase.js';
 import { getSelfPingStats, executePing } from '../services/selfPingService.js';
+import { isEmailConfigured } from '../services/emailService.js';
 
 const router = express.Router();
 const startTime = Date.now();
@@ -13,6 +14,7 @@ router.get('/health', (req, res) => {
     uptime: `${uptimeSeconds}s`,
     timestamp: new Date().toISOString(),
     firebaseReady: isFirebaseInitialized,
+    resendReady: isEmailConfigured(),
     selfPing: getSelfPingStats(),
   });
 });
