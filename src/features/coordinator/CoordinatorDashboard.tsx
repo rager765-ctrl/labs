@@ -32,10 +32,18 @@ export const CoordinatorDashboard: React.FC = () => {
 
   const todayStr = new Date().toDateString();
 
-  // Sessions today
-  const todaySessions = sessions.filter(s => {
-    const d = new Date(s.startsAt);
-    return d.toDateString() === todayStr;
+  const isToday = (isoDate?: string) => {
+    if (!isoDate) return false;
+    try {
+      return new Date(isoDate).toDateString() === todayStr;
+    } catch {
+      return false;
+    }
+  };
+
+  // Sessions today or currently live
+  const activeOrTodaySessions = sessions.filter(s => {
+    return s.status === 'live' || isToday(s.startsAt) || isToday(s.endsAt);
   });
 
   const liveSessions = sessions.filter(s => s.status === 'live');
@@ -43,15 +51,32 @@ export const CoordinatorDashboard: React.FC = () => {
 
   // Overall metrics calculation
   const totalStudents = students.length;
-  // Today's total present count across today's sessions
+
+  // Recorded today: count any attendance record where check-in occurred today,
+  // OR belongs to a live or today's meeting session
   const todayRecords = attendanceRecords.filter(r => {
+    const isPresent = r.status === 'present' || r.status === 'late';
+    if (!isPresent) return false;
+    if (isToday(r.checkedInAt)) return true;
     const s = sessions.find(sess => sess.id === r.sessionId);
-    if (!s) return false;
-    return new Date(s.startsAt).toDateString() === todayStr && (r.status === 'present' || r.status === 'late');
+    return s && (s.status === 'live' || isToday(s.startsAt));
   });
 
-  const totalPossibleToday = todaySessions.reduce((acc, curr) => acc + (curr.eligibleStudentIds?.length || 0), 0);
-  const overallRate = totalPossibleToday > 0 ? Math.round((todayRecords.length / totalPossibleToday) * 100) : 0;
+  // Calculate attendance rate across active/today's sessions or all available sessions
+  const targetSessions = activeOrTodaySessions.length > 0 ? activeOrTodaySessions : sessions.slice(0, 5);
+  const totalArrivedToday = todayRecords.length;
+
+  const totalPossibleToday = targetSessions.reduce((acc, curr) => {
+    const sessionRecs = attendanceRecords.filter(r => r.sessionId === curr.id && (r.status === 'present' || r.status === 'late'));
+    const expected = curr.eligibleStudentIds && curr.eligibleStudentIds.length > 0
+      ? curr.eligibleStudentIds.length
+      : Math.max(totalStudents, sessionRecs.length, 1);
+    return acc + expected;
+  }, 0);
+
+  const overallRate = totalPossibleToday > 0 
+    ? Math.min(100, Math.round((totalArrivedToday / totalPossibleToday) * 100)) 
+    : (totalArrivedToday > 0 ? 100 : 0);
 
   const handleStartSession = (sessionId: string) => {
     updateSessionStatus(sessionId, 'live');
@@ -326,7 +351,7 @@ export const CoordinatorDashboard: React.FC = () => {
           <div className="card" style={{ padding: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
-                Today's Meeting Schedule
+                {activeOrTodaySessions.length > 0 ? "Today's & Active Schedule" : "Recent Meeting Sessions"}
               </h2>
               <button
                 onClick={() => navigate('/coordinator/sessions')}
@@ -337,12 +362,12 @@ export const CoordinatorDashboard: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {todaySessions.length === 0 ? (
+              {(activeOrTodaySessions.length > 0 ? activeOrTodaySessions : sessions.slice(0, 4)).length === 0 ? (
                 <div style={{ padding: '24px', textAlign: 'center', color: 'var(--color-ink-500)', fontSize: '13px' }}>
-                  No sessions scheduled for today.
+                  No sessions created yet. Schedule your first session above!
                 </div>
               ) : (
-                todaySessions.map(session => {
+                (activeOrTodaySessions.length > 0 ? activeOrTodaySessions : sessions.slice(0, 4)).map(session => {
                   const m = calculateSessionMetrics(session, attendanceRecords);
                   return (
                     <div

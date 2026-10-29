@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type {
   User,
@@ -146,6 +146,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
   const [cloudAttendanceReady, setCloudAttendanceReady] = useState({ sessions: false, attendance: false });
 
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   // Keep state synced with localStorage as offline/fast cache
   useEffect(() => {
     saveStoredState(state);
@@ -201,7 +204,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Manage Realtime Firestore Listeners Reactively (re-established when user authenticates)
+  const effectiveRole = state.currentRole || state.currentUser?.role || 'student';
+  const effectiveUid = firebaseUser?.uid || state.currentUser?.id;
+
+  // Manage Realtime Firestore Listeners Reactively (re-established when user authenticates or role changes)
   useEffect(() => {
     if (!firebaseUser) {
       setIsCloudConnected(false);
@@ -222,8 +228,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!initialSessionsSync) {
         // Detect session transitioning to live
         cloudSessions.forEach(sess => {
-          const prev = state.sessions.find(s => s.id === sess.id);
-          if (sess.status === 'live' && prev?.status !== 'live' && state.currentUser?.role === 'student') {
+          const prev = stateRef.current.sessions.find(s => s.id === sess.id);
+          if (sess.status === 'live' && prev?.status !== 'live' && effectiveRole === 'student') {
             triggerSystemNotification(
               `🔴 Meeting Live: ${sess.title}`,
               `Check-in is now open at ${sess.room || 'the lab'}. Tap to verify attendance.`,
@@ -245,13 +251,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 3. Live Attendance (scoped to studentId for students, global for coordinators)
     const unsubAttendance = subscribeToAttendance(
       (cloudAttendance: AttendanceRecord[]) => {
-        if (!initialAttendanceSync && state.currentUser?.role === 'coordinator') {
+        if (!initialAttendanceSync && effectiveRole === 'coordinator') {
           // Detect new check-ins or check-outs
-          const existingIds = new Set(state.attendanceRecords.map(r => r.id));
+          const existingIds = new Set(stateRef.current.attendanceRecords.map(r => r.id));
           cloudAttendance.forEach(rec => {
             if (!existingIds.has(rec.id) && (rec.status === 'present' || rec.status === 'late')) {
-              const studentName = state.students.find(s => s.id === rec.studentId)?.name || 'Attendee';
-              const sessTitle = state.sessions.find(s => s.id === rec.sessionId)?.title || 'Meeting';
+              const studentName = stateRef.current.students.find(s => s.id === rec.studentId)?.name || 'Attendee';
+              const sessTitle = stateRef.current.sessions.find(s => s.id === rec.sessionId)?.title || 'Meeting';
               triggerSystemNotification(
                 `🟢 Attendee Checked In: ${studentName}`,
                 `${studentName} checked in as ${rec.status.toUpperCase()} for "${sessTitle}".`,
@@ -264,19 +270,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setState(prev => ({ ...prev, attendanceRecords: cloudAttendance }));
         setCloudAttendanceReady(prev => ({ ...prev, attendance: true }));
       },
-      state.currentUser?.role,
-      firebaseUser.uid
+      effectiveRole,
+      effectiveUid
     );
 
     // 4. Live Corrections (scoped to studentId for students, global for coordinators)
     const unsubCorrections = subscribeToCorrections(
       (cloudCorrections: CorrectionRequest[]) => {
         if (!initialCorrectionsSync) {
-          if (state.currentUser?.role === 'coordinator') {
-            const existingCorrIds = new Set(state.corrections.map(c => c.id));
+          if (effectiveRole === 'coordinator') {
+            const existingCorrIds = new Set(stateRef.current.corrections.map(c => c.id));
             cloudCorrections.forEach(corr => {
               if (!existingCorrIds.has(corr.id) && corr.status === 'pending') {
-                const studentName = state.students.find(s => s.id === corr.studentId)?.name || 'Attendee';
+                const studentName = stateRef.current.students.find(s => s.id === corr.studentId)?.name || 'Attendee';
                 triggerSystemNotification(
                   `⚖️ New Issue Request: ${studentName}`,
                   `${studentName} submitted an attendance correction for coordinator review.`,
@@ -284,10 +290,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 );
               }
             });
-          } else if (state.currentUser?.role === 'student') {
+          } else if (effectiveRole === 'student') {
             cloudCorrections.forEach(corr => {
-              const prevCorr = state.corrections.find(c => c.id === corr.id);
-              if (corr.studentId === state.currentUser?.id && corr.status !== 'pending' && prevCorr?.status === 'pending') {
+              const prevCorr = stateRef.current.corrections.find(c => c.id === corr.id);
+              if (corr.studentId === effectiveUid && corr.status !== 'pending' && prevCorr?.status === 'pending') {
                 triggerSystemNotification(
                   `Correction ${corr.status === 'approved' ? 'Approved ✅' : corr.status === 'resolved' ? 'Resolved ✅' : 'Rejected ❌'}`,
                   `Your attendance correction was ${corr.status}.`,
@@ -300,8 +306,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         initialCorrectionsSync = false;
         setState(prev => ({ ...prev, corrections: cloudCorrections }));
       },
-      state.currentUser?.role,
-      firebaseUser.uid
+      effectiveRole,
+      effectiveUid
     );
 
     return () => {
@@ -310,7 +316,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubAttendance();
       unsubCorrections();
     };
-  }, [firebaseUser, state.currentUser?.role, state.currentUser?.id, state.sessions, state.attendanceRecords, state.corrections, state.students]);
+  }, [firebaseUser?.uid, effectiveRole, effectiveUid]);
 
   // Listen for foreground push notifications and display notification toast + native OS notification
   useEffect(() => {
