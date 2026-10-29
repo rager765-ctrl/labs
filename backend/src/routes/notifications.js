@@ -1206,4 +1206,25 @@ router.post('/cleanup-duplicates', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/notifications/set-role
+ * Administrative endpoint to update or restore a user role in Firestore
+ */
+router.post('/set-role', async (req, res) => {
+  try {
+    const { uid, role } = req.body;
+    if (!uid || !role) {
+      return res.status(400).json({ success: false, error: 'Both "uid" and "role" are required.' });
+    }
+    if (db) {
+      await db.collection('users').doc(uid).set({ role }, { merge: true });
+      addLog('info', `User role updated: UID "${uid}" set to "${role}".`);
+    }
+    return res.json({ success: true, uid, role });
+  } catch (error) {
+    addLog('fail', `Failed to set user role: ${error.message}`);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
