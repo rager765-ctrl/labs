@@ -12,12 +12,16 @@ export const CoordinatorProfile: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, firebaseUser, logoutFirebase, updateCurrentUser, addToast } = useApp();
   const [editingProfile, setEditingProfile] = useState(false);
+  const effectiveName = currentUser?.name || firebaseUser?.displayName || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : '') || '';
+  const effectiveEmail = currentUser?.email || firebaseUser?.email || '';
+  const effectiveStaffId = currentUser?.studentId || (firebaseUser ? 'FAC-' + firebaseUser.uid.substring(0, 6).toUpperCase() : '');
+
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profile, setProfile] = useState({
-    name: currentUser?.name || '',
-    email: currentUser?.email || '',
-    staffId: currentUser?.studentId || '',
+    name: effectiveName,
+    email: effectiveEmail,
+    staffId: effectiveStaffId,
     department: currentUser?.programme || '',
     designation: currentUser?.level || '',
     labRoom: currentUser?.labRoom || '',
@@ -25,14 +29,14 @@ export const CoordinatorProfile: React.FC = () => {
 
   useEffect(() => {
     setProfile({
-      name: currentUser?.name || '',
-      email: currentUser?.email || '',
-      staffId: currentUser?.studentId || '',
+      name: currentUser?.name || firebaseUser?.displayName || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : '') || '',
+      email: currentUser?.email || firebaseUser?.email || '',
+      staffId: currentUser?.studentId || (firebaseUser ? 'FAC-' + firebaseUser.uid.substring(0, 6).toUpperCase() : ''),
       department: currentUser?.programme || '',
       designation: currentUser?.level || '',
       labRoom: currentUser?.labRoom || '',
     });
-  }, [currentUser]);
+  }, [currentUser, firebaseUser]);
 
   const updateField = (field: keyof typeof profile, value: string) => {
     setProfile(previous => ({ ...previous, [field]: value }));
@@ -42,9 +46,9 @@ export const CoordinatorProfile: React.FC = () => {
   const toggleProfileEditor = () => {
     if (editingProfile) {
       setProfile({
-        name: currentUser?.name || '',
-        email: currentUser?.email || '',
-        staffId: currentUser?.studentId || '',
+        name: currentUser?.name || firebaseUser?.displayName || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : '') || '',
+        email: currentUser?.email || firebaseUser?.email || '',
+        staffId: currentUser?.studentId || (firebaseUser ? 'FAC-' + firebaseUser.uid.substring(0, 6).toUpperCase() : ''),
         department: currentUser?.programme || '',
         designation: currentUser?.level || '',
         labRoom: currentUser?.labRoom || '',
@@ -140,16 +144,16 @@ export const CoordinatorProfile: React.FC = () => {
               }}
             >
               {currentUser?.avatarUrl ? (
-                <img src={currentUser.avatarUrl} alt={currentUser.name || 'Coordinator'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={currentUser.avatarUrl} alt={currentUser?.name || firebaseUser?.displayName || 'Coordinator'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                (currentUser?.name || 'EV').split(' ').map(n => n[0]).join('')
+                (currentUser?.name || firebaseUser?.displayName || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : '') || 'EV').split(' ').map(n => n[0]).join('')
               )}
             </div>
 
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <h2 style={{ fontFamily: 'var(--font-display, "Squada One", sans-serif)', fontSize: '20px', fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase', color: 'var(--color-ink-900)', margin: 0 }}>
-                  {currentUser?.name || 'Coordinator'}
+                  {currentUser?.name || firebaseUser?.displayName || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : '') || 'Coordinator'}
                 </h2>
                 <span
                   style={{
@@ -168,7 +172,7 @@ export const CoordinatorProfile: React.FC = () => {
                 {currentUser?.level || 'Lab Coordinator'}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--color-ink-500)', marginTop: '2px' }}>
-                Faculty ID: {currentUser?.studentId || 'FAC-ONLINE'}
+                Faculty ID: {currentUser?.studentId || (firebaseUser ? 'FAC-' + firebaseUser.uid.substring(0, 6).toUpperCase() : 'FAC-ONLINE')}
               </div>
             </div>
           </div>
@@ -190,7 +194,7 @@ export const CoordinatorProfile: React.FC = () => {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--color-ink-500)' }}>Contact Email:</span>
-              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser?.email || 'coordinator@university.edu'}</strong>
+              <strong style={{ color: 'var(--color-ink-900)' }}>{currentUser?.email || firebaseUser?.email || 'coordinator@university.edu'}</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--color-ink-500)' }}>Assigned Facilities:</span>

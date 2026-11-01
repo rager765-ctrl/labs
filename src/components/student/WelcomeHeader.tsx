@@ -91,7 +91,7 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifi
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              (user?.name || 'Attendee').split(' ').map(n => n[0]).join('')
+              (user?.name || (user?.email ? user.email.split('@')[0] : '') || 'Attendee').split(' ').map(n => n[0]).join('')
             )}
           </div>
           <div>
@@ -110,7 +110,7 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ user, onOpenNotifi
                 color: '#FFFFFF',
               }}
             >
-              Hi, {(user?.name || 'Attendee').split(' ')[0]} 👋
+              Hi, {(user?.name || (user?.email ? user.email.split('@')[0] : '') || 'Attendee').split(' ')[0]} 👋
             </h1>
           </div>
         </div>

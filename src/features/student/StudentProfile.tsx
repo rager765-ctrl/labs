@@ -11,22 +11,26 @@ export const StudentProfile: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, firebaseUser, logoutFirebase, addToast, updateCurrentUser } = useApp();
 
+  const effectiveName = currentUser?.name || firebaseUser?.displayName || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : '') || '';
+  const effectiveEmail = currentUser?.email || firebaseUser?.email || '';
+  const effectiveStudentId = currentUser?.studentId || (firebaseUser ? 'VIS-' + firebaseUser.uid.substring(0, 6).toUpperCase() : '');
+
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profile, setProfile] = useState({
-    name: currentUser?.name || '',
-    email: currentUser?.email || '',
-    studentId: currentUser?.studentId || '',
+    name: effectiveName,
+    email: effectiveEmail,
+    studentId: effectiveStudentId,
   });
 
   useEffect(() => {
     setProfile({
-      name: currentUser?.name || '',
-      email: currentUser?.email || '',
-      studentId: currentUser?.studentId || '',
+      name: currentUser?.name || firebaseUser?.displayName || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : '') || '',
+      email: currentUser?.email || firebaseUser?.email || '',
+      studentId: currentUser?.studentId || (firebaseUser ? 'VIS-' + firebaseUser.uid.substring(0, 6).toUpperCase() : ''),
     });
-  }, [currentUser]);
+  }, [currentUser, firebaseUser]);
 
   const updateField = (field: keyof typeof profile, value: string) => {
     setProfile(previous => ({ ...previous, [field]: value }));
@@ -36,9 +40,9 @@ export const StudentProfile: React.FC = () => {
   const toggleProfileEditor = () => {
     if (editingProfile) {
       setProfile({
-        name: currentUser?.name || '',
-        email: currentUser?.email || '',
-        studentId: currentUser?.studentId || '',
+        name: currentUser?.name || firebaseUser?.displayName || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : '') || '',
+        email: currentUser?.email || firebaseUser?.email || '',
+        studentId: currentUser?.studentId || (firebaseUser ? 'VIS-' + firebaseUser.uid.substring(0, 6).toUpperCase() : ''),
       });
     }
     setEditingProfile(value => !value);
@@ -149,17 +153,17 @@ export const StudentProfile: React.FC = () => {
                 flexShrink: 0,
               }}
             >
-                {currentUser?.avatarUrl ? (
-                <img src={currentUser.avatarUrl} alt={currentUser.name || 'Attendee'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {currentUser?.avatarUrl ? (
+                <img src={currentUser.avatarUrl} alt={currentUser?.name || firebaseUser?.displayName || 'Attendee'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                (currentUser?.name || 'ST').split(' ').map(n => n[0]).join('')
+                (currentUser?.name || firebaseUser?.displayName || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : '') || 'ST').split(' ').map(n => n[0]).join('')
               )}
             </div>
 
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <h2 style={{ fontFamily: 'var(--font-display, "Squada One", sans-serif)', fontSize: '20px', fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase', color: 'var(--color-ink-900)', margin: 0 }}>
-                  {currentUser?.name || 'Attendee Account'}
+                  {currentUser?.name || firebaseUser?.displayName || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : '') || 'Attendee Account'}
                 </h2>
                 <span
                   className="role-badge"
@@ -172,14 +176,14 @@ export const StudentProfile: React.FC = () => {
                     borderRadius: 'var(--radius-pill)',
                   }}
                 >
-                  ATTENDEE
+                  {(currentUser?.role || 'student').toUpperCase() === 'COORDINATOR' ? 'COORDINATOR' : 'ATTENDEE'}
                 </span>
               </div>
               <div style={{ fontSize: '12px', color: 'var(--color-brand-600)', fontWeight: 600, marginTop: '2px' }}>
-                Student ID: {currentUser?.studentId || 'NOT SET'}
+                Student ID: {currentUser?.studentId || (firebaseUser ? 'VIS-' + firebaseUser.uid.substring(0, 6).toUpperCase() : 'NOT SET')}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--color-ink-500)', marginTop: '2px' }}>
-                {currentUser?.email || 'attendee@example.com'}
+                {currentUser?.email || firebaseUser?.email || 'attendee@example.com'}
               </div>
             </div>
           </div>

@@ -8,7 +8,7 @@ import {
   deleteUser,
 } from 'firebase/auth';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, setDoc, getDoc, runTransaction, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, runTransaction, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import type { User, UserRole } from '../types';
 import { getStoredDemoInvites, DEMO_INVITES_STORAGE_KEY } from './firestoreService';
@@ -35,14 +35,14 @@ export const signInUser = async (email: string, password: string): Promise<User>
   const isCoord = fbUser.email === 'e.vance@university.edu' || fbUser.email?.toLowerCase().includes('coord');
   const defaultProfile: User = {
     id: fbUser.uid,
-    name: fbUser.displayName || (isCoord ? 'Innovations Lab Coordinator' : 'Lab Visitor'),
+    name: fbUser.displayName || (isCoord ? 'Innovations Lab Coordinator' : (email.split('@')[0] || 'Attendee')),
     email: fbUser.email || email,
     role: isCoord ? 'coordinator' : 'student',
     studentId: isCoord ? 'FAC-8042' : 'VIS-' + fbUser.uid.substring(0, 6).toUpperCase(),
-    ...(isCoord ? { programme: 'Innovations Lab', level: 'Senior Lab Coordinator' } : {}),
+    ...(isCoord ? { programme: 'Innovations Lab', level: 'Senior Lab Coordinator' } : { programme: 'Innovations Lab' }),
   };
 
-  await setDoc(userDocRef, defaultProfile);
+  await setDoc(userDocRef, defaultProfile, { merge: true });
   return defaultProfile;
 };
 
@@ -249,33 +249,83 @@ export const signOutUser = async (): Promise<void> => {
 export const listenToAuthChanges = (
   callback: (user: User | null, fbUser: FirebaseUser | null) => void
 ): (() => void) => {
-  return onAuthStateChanged(auth, async (fbUser) => {
+  let docUnsub: (() => void) | null = null;
+
+  const authUnsub = onAuthStateChanged(auth, (fbUser) => {
+    if (docUnsub) {
+      docUnsub();
+      docUnsub = null;
+    }
+
     if (!fbUser) {
       callback(null, null);
       return;
     }
 
-    try {
-      const userDocRef = doc(db, 'users', fbUser.uid);
-      const snap = await getDoc(userDocRef);
+    const userDocRef = doc(db, 'users', fbUser.uid);
+    const isCoordEmail = fbUser.email === 'e.vance@university.edu' || fbUser.email?.toLowerCase().includes('coord');
 
-      if (snap.exists()) {
-        callback(snap.data() as User, fbUser);
-      } else {
+    // Subscribe in real-time to the user's profile in Firestore
+    docUnsub = onSnapshot(
+      userDocRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data() as User;
+          const role = (isCoordEmail || data.role === 'coordinator') ? 'coordinator' : (data.role || 'student');
+          const resolvedProfile: User = {
+            id: fbUser.uid,
+            name: data.name || fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : '') || (role === 'coordinator' ? 'Innovations Lab Coordinator' : 'Attendee'),
+            email: data.email || fbUser.email || '',
+            role,
+            studentId: data.studentId || (role === 'coordinator' ? 'FAC-8042' : 'VIS-' + fbUser.uid.substring(0, 6).toUpperCase()),
+            programme: data.programme || (role === 'coordinator' ? 'School of Computing & Data Science' : 'Innovations Lab'),
+            level: data.level || (role === 'coordinator' ? 'Senior Lab Coordinator' : 'Attendee'),
+            avatarUrl: data.avatarUrl || fbUser.photoURL || undefined,
+            labRoom: data.labRoom,
+          };
+          callback(resolvedProfile, fbUser);
+        } else {
+          // Document does not exist yet (e.g. freshly created Auth account before setDoc completes)
+          const role = isCoordEmail ? 'coordinator' : 'student';
+          const provisionalProfile: User = {
+            id: fbUser.uid,
+            name: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : '') || (role === 'coordinator' ? 'Innovations Lab Coordinator' : 'Attendee'),
+            email: fbUser.email || '',
+            role,
+            studentId: role === 'coordinator' ? 'FAC-8042' : 'VIS-' + fbUser.uid.substring(0, 6).toUpperCase(),
+            ...(role === 'coordinator'
+              ? { programme: 'School of Computing & Data Science', level: 'Senior Lab Coordinator' }
+              : { programme: 'Innovations Lab', level: 'Attendee' }),
+            avatarUrl: fbUser.photoURL || undefined,
+          };
+          // Persist so subsequent loads find the document
+          setDoc(userDocRef, provisionalProfile, { merge: true }).catch(() => undefined);
+          callback(provisionalProfile, fbUser);
+        }
+      },
+      (err) => {
+        console.warn('Error listening to user document from Firestore:', err);
+        // Fallback gracefully without setting user to null
+        const role = isCoordEmail ? 'coordinator' : 'student';
         const fallback: User = {
           id: fbUser.uid,
-          name: fbUser.displayName || 'Student',
+          name: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : '') || (role === 'coordinator' ? 'Innovations Lab Coordinator' : 'Attendee'),
           email: fbUser.email || '',
-          role: 'student',
-          studentId: Math.floor(10000000 + Math.random() * 90000000).toString(),
-          programme: 'B.Sc. Computer Science',
-          level: 'Level 300',
+          role,
+          studentId: role === 'coordinator' ? 'FAC-8042' : 'VIS-' + fbUser.uid.substring(0, 6).toUpperCase(),
+          programme: role === 'coordinator' ? 'School of Computing & Data Science' : 'Innovations Lab',
+          level: role === 'coordinator' ? 'Senior Lab Coordinator' : 'Attendee',
         };
         callback(fallback, fbUser);
       }
-    } catch (err) {
-      console.warn('Error fetching user document from Firestore:', err);
-      callback(null, fbUser);
-    }
+    );
   });
+
+  return () => {
+    if (docUnsub) {
+      docUnsub();
+      docUnsub = null;
+    }
+    authUnsub();
+  };
 };

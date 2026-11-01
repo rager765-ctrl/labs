@@ -39,10 +39,14 @@ export function loadStoredState(): AppState {
       saveStoredState(initial);
       return initial;
     }
-    if (!parsed.sessions || !parsed.attendanceRecords) {
-      throw new Error('Incomplete storage schema');
-    }
-    return parsed;
+    return {
+      currentRole: parsed.currentRole || parsed.currentUser?.role || 'student',
+      currentUser: parsed.currentUser || (null as any),
+      students: Array.isArray(parsed.students) ? parsed.students : [],
+      sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
+      attendanceRecords: Array.isArray(parsed.attendanceRecords) ? parsed.attendanceRecords : [],
+      corrections: Array.isArray(parsed.corrections) ? parsed.corrections : [],
+    };
   } catch (err) {
     const initial = getInitialState();
     saveStoredState(initial);

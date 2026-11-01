@@ -305,10 +305,14 @@ router.post('/register-token', requireFirebase, async (req, res) => {
       const existingData = userSnap.exists ? userSnap.data() : {};
       const existingDevices = { ...(existingData.devices || {}) };
 
-      // Determine final role: NEVER demote a coordinator to student if role was not explicitly sent
-      finalRole = (role && (role === 'coordinator' || role === 'student'))
-        ? role
-        : (existingData.role || 'student');
+      // Determine final role: NEVER demote a coordinator to student via device token registration
+      if (existingData.role === 'coordinator') {
+        finalRole = 'coordinator';
+      } else if (role && (role === 'coordinator' || role === 'student')) {
+        finalRole = role;
+      } else {
+        finalRole = existingData.role || 'student';
+      }
 
       // Remove any prior entry using this token under another key
       for (const [k, d] of Object.entries(existingDevices)) {

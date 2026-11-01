@@ -205,7 +205,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  const effectiveRole = state.currentRole || state.currentUser?.role || 'student';
+  const effectiveRole = state.currentUser?.role || state.currentRole || 'student';
   const effectiveUid = firebaseUser?.uid || state.currentUser?.id;
 
   // Manage Realtime Firestore Listeners Reactively (re-established when user authenticates or role changes)
@@ -342,7 +342,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const uid = firebaseUser?.uid || state.currentUser?.id;
     if (!uid) return;
-    const role = state.currentUser?.role || state.currentRole || 'student';
+    // Only pass role if currentUser profile is actually loaded to prevent demoting coordinators
+    const role = state.currentUser?.role;
 
     // 1. Initial silent reconciliation on user auth / state load
     autoReconcileFcmPush(uid, role).catch(() => {});
@@ -359,13 +360,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       window.removeEventListener('focus', handleSync);
       window.removeEventListener('online', handleSync);
     };
-  }, [firebaseUser?.uid, state.currentUser?.id, state.currentUser?.role, state.currentRole]);
+  }, [firebaseUser?.uid, state.currentUser?.id, state.currentUser?.role]);
 
   // Client keep-alive ping for backend service on Render with automatic push resync
   useEffect(() => {
     const triggerReconcile = () => {
       const uid = firebaseUser?.uid || stateRef.current.currentUser?.id;
-      const role = stateRef.current.currentUser?.role || stateRef.current.currentRole || 'student';
+      const role = stateRef.current.currentUser?.role;
       if (uid) {
         autoReconcileFcmPush(uid, role).catch(() => {});
       }
