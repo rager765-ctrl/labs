@@ -20,7 +20,26 @@ export function isEmailConfigured() {
 }
 
 export function getSenderEmail() {
-  return process.env.RESEND_FROM_EMAIL || DEFAULT_FALLBACK_FROM;
+  const custom = process.env.RESEND_FROM_EMAIL;
+  if (!custom) return DEFAULT_FALLBACK_FROM;
+  let trimmed = custom.trim();
+  // Strip outer quotes if entered in Render environment variables
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
+  // If user entered only <email@domain.com> without display name
+  if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+    const bare = trimmed.slice(1, -1).trim();
+    return `Innovations Lab <${bare}>`;
+  }
+  // If user entered bare email without name e.g. noreply@domain.com
+  if (!trimmed.includes('<') && trimmed.includes('@')) {
+    return `Innovations Lab <${trimmed}>`;
+  }
+  return trimmed;
 }
 
 /**
@@ -593,33 +612,14 @@ export async function sendTestEmail(toEmail) {
     html: wrapHtml(title, preheader, bodyHtml),
   });
 
-  if (
-    error &&
-    (error.statusCode === 403 || error.name === 'validation_error') &&
-    sendFrom !== DEFAULT_FALLBACK_FROM
-  ) {
-    addLog('info', `Resend: Sender "${sendFrom}" unverified. Retrying test email with sandbox sender "${DEFAULT_FALLBACK_FROM}"...`, {
-      to: toEmail,
-    });
-    sendFrom = DEFAULT_FALLBACK_FROM;
-    const retryRes = await client.emails.send({
-      from: sendFrom,
-      to: toEmail,
-      subject: title,
-      html: wrapHtml(title, preheader, bodyHtml),
-    });
-    data = retryRes.data;
-    error = retryRes.error;
-  }
-
   if (error) {
     const errorMsg = error.message || JSON.stringify(error);
-    addLog('fail', `Resend Email: Test email to ${toEmail} rejected: ${errorMsg}`, {
+    addLog('fail', `Resend Email: Test email from "${sendFrom}" to ${toEmail} rejected: ${errorMsg}`, {
       to: toEmail,
       error,
       from: sendFrom,
     });
-    throw new Error(errorMsg);
+    throw new Error(`Sender "${sendFrom}" failed: ${errorMsg}`);
   }
 
   addLog('success', `Resend Email: Test email sent to ${toEmail}. MessageId: ${data?.id}`, {
