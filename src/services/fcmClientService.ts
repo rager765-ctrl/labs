@@ -589,3 +589,30 @@ export async function sendTestEmailAlert(email: string): Promise<{ success: bool
     return { success: false, error: err.message || 'Network error dispatching test email.' };
   }
 }
+
+/**
+ * Dispatches a bulk email broadcast to multiple recipients via backend Resend integration
+ */
+export async function sendBulkEmailAlert(params: {
+  recipients: string[];
+  subject: string;
+  message: string;
+  title?: string;
+  actionButton?: { text: string; url: string };
+}): Promise<{ success: boolean; delivered?: number; total?: number; error?: string }> {
+  try {
+    const backendUrl = getBackendBaseUrl();
+    const res = await fetch(`${backendUrl}/api/notifications/send-bulk-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return { success: false, error: data.error || 'Failed to dispatch bulk email.' };
+    }
+    return { success: true, delivered: data.delivered, total: data.total };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error dispatching bulk email.' };
+  }
+}

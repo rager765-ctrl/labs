@@ -7,6 +7,7 @@ import {
   sendCorrectionDecisionEmail,
   sendCoordinatorAlertEmail,
   sendTestEmail,
+  sendBulkBroadcastEmail,
 } from '../services/emailService.js';
 import {
   getNotificationConfig,
@@ -824,25 +825,36 @@ router.post('/session-alert', async (req, res) => {
     if (db) {
       try {
         if (Array.isArray(eligibleStudentIds) && eligibleStudentIds.length > 0) {
-          // 1. Check doc ID match
-          const userDocs = await Promise.all(
-            eligibleStudentIds.slice(0, 50).map(id => db.collection('users').doc(id).get())
-          );
-          userDocs.forEach(docSnap => {
-            if (docSnap.exists) {
-              const data = docSnap.data();
-              if (Array.isArray(data.fcmTokens) && data.notificationsEnabled !== false) {
-                tokenList.push(...data.fcmTokens);
+          // 1. Check doc ID match in chunks of 50
+          for (let i = 0; i < eligibleStudentIds.length; i += 50) {
+            const idChunk = eligibleStudentIds.slice(i, i + 50);
+            const userDocs = await Promise.all(idChunk.map(id => db.collection('users').doc(id).get()));
+            userDocs.forEach(docSnap => {
+              if (docSnap.exists) {
+                const data = docSnap.data();
+                if (Array.isArray(data.fcmTokens) && data.notificationsEnabled !== false) {
+                  tokenList.push(...data.fcmTokens);
+                }
+                if (data.email) {
+                  emailList.push(data.email);
+                }
               }
-              if (data.email) {
-                emailList.push(data.email);
-              }
-            }
-          });
+            });
+          }
 
-          // 2. Also check studentId field match
-          for (const sid of eligibleStudentIds.slice(0, 50)) {
-            const byStudentIdSnap = await db.collection('users').where('studentId', '==', sid).get();
+          // 2. Also check studentId field match in chunks
+          for (let i = 0; i < eligibleStudentIds.length; i += 30) {
+            const sidChunk = eligibleStudentIds.slice(i, i + 30);
+            const byStudentIdSnap = await db.collection('users').where('studentId', 'in', sidChunk).get().catch(async () => {
+              // Fallback to sequential if 'in' operator fails
+              const results = [];
+              for (const sid of sidChunk) {
+                const snap = await db.collection('users').where('studentId', '==', sid).get();
+                snap.forEach(d => results.push(d));
+              }
+              return results;
+            });
+
             byStudentIdSnap.forEach(d => {
               const data = d.data();
               if (Array.isArray(data.fcmTokens) && data.notificationsEnabled !== false) {
@@ -853,7 +865,7 @@ router.post('/session-alert', async (req, res) => {
           }
         }
 
-        // 3. Fallback: If tokenList is empty, gather ALL registered student tokens in Firestore
+        // 3. Fallback: If tokenList is empty, gather ALL registered student tokens and emails in Firestore
         if (tokenList.length === 0) {
           const allStudentsSnap = await db.collection('users').where('role', '==', 'student').get();
           allStudentsSnap.forEach(docSnap => {
@@ -861,11 +873,13 @@ router.post('/session-alert', async (req, res) => {
             if (Array.isArray(data.fcmTokens) && data.notificationsEnabled !== false) {
               tokenList.push(...data.fcmTokens);
             }
-            if (data.email && (!emailList.length || emailList.length < 50)) {
+            if (data.email) {
               emailList.push(data.email);
             }
           });
         }
+
+        emailList = Array.from(new Set(emailList.filter(Boolean)));
       } catch (dbErr) {
         console.warn('Could not query users from Firestore for session alert:', dbErr.message);
       }
@@ -1260,6 +1274,42 @@ router.post('/reconcile', async (req, res) => {
     return res.json({ success: true, ...result });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
+/**
+ * POST /api/notifications/send-bulk-email
+ * Sends a custom bulk announcement email to a list of recipients using Resend Batch API
+ */
+router.post('/send-bulk-email', async (req, res) => {
+  try {
+    const { recipients, subject, title, message, actionButton } = req.body;
+    if (!recipients || (Array.isArray(recipients) && recipients.length === 0)) {
+      return res.status(400).json({ success: false, error: 'Recipients list is required.' });
+    }
+    if (!subject || !message) {
+      return res.status(400).json({ success: false, error: 'Subject and message are required.' });
+    }
+
+    const rawList = Array.isArray(recipients) ? recipients : [recipients];
+    const result = await sendBulkBroadcastEmail({
+      recipients: rawList,
+      subject,
+      title: title || subject,
+      message,
+      actionButton,
+    });
+
+    return res.json({
+      success: result.success,
+      delivered: result.delivered,
+      total: result.total,
+      results: result.results,
+    });
+  } catch (err) {
+    console.error('Error in /api/notifications/send-bulk-email:', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

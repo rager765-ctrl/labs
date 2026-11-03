@@ -3,6 +3,9 @@ import { addLog } from './loggerService.js';
 
 let resendClient = null;
 
+const BATCH_SIZE = 100;
+const DEFAULT_FALLBACK_FROM = 'Innovations Lab <onboarding@resend.dev>';
+
 export function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return null;
@@ -17,7 +20,7 @@ export function isEmailConfigured() {
 }
 
 export function getSenderEmail() {
-  return process.env.RESEND_FROM_EMAIL || 'Innovations Lab <onboarding@resend.dev>';
+  return process.env.RESEND_FROM_EMAIL || DEFAULT_FALLBACK_FROM;
 }
 
 /**
@@ -83,7 +86,561 @@ function wrapHtml(title, preheader, bodyHtml, actionButton = null) {
 }
 
 /**
- * Sends meeting live or scheduled email to an attendee or list of attendees
+ * Robust bulk email dispatcher leveraging Resend's batch endpoint (client.batch.send).
+ * Features:
+ * - Chunks large recipient lists into 100-email batches (Resend maximum batch size).
+ * - Uses permissive batch validation (batchValidation: 'permissive') so single invalid emails don't fail the batch.
+ * - Auto-recovers with fallback onboarding@resend.dev sender if custom domain isn't verified (HTTP 403).
+ * - Graceful fallback to concurrent micro-batches if batch API encounters network or schema errors.
+ * - Real-time event logging to loggerService.
+ */
+async function dispatchResendBatchEmails({
+  client,
+  recipients,
+  subject,
+  html,
+  text = null,
+  contextTag = 'Batch Email',
+  metadata = {},
+}) {
+  const validRecipients = Array.from(
+    new Set(
+      (recipients || [])
+        .filter(Boolean)
+        .map(e => (typeof e === 'string' ? e.trim().toLowerCase() : ''))
+        .filter(e => e.length > 0 && e.includes('@'))
+    )
+  );
+
+  if (validRecipients.length === 0) {
+    return { success: false, reason: 'No valid recipient email addresses', delivered: 0, total: 0, results: [] };
+  }
+
+  const primarySender = getSenderEmail();
+  const results = [];
+
+  // Optimized fast-path for single recipient
+  if (validRecipients.length === 1) {
+    const email = validRecipients[0];
+    let activeSender = primarySender;
+    try {
+      let { data, error } = await client.emails.send({
+        from: activeSender,
+        to: email,
+        subject,
+        html,
+        ...(text ? { text } : {}),
+      });
+
+      // Domain unverified fallback for single email
+      if (
+        error &&
+        (error.statusCode === 403 || error.name === 'validation_error') &&
+        activeSender !== DEFAULT_FALLBACK_FROM
+      ) {
+        addLog('info', `Resend: Sender "${activeSender}" unverified. Retrying single email with sandbox sender "${DEFAULT_FALLBACK_FROM}"...`, {
+          email,
+          contextTag,
+        });
+        activeSender = DEFAULT_FALLBACK_FROM;
+        const retryRes = await client.emails.send({
+          from: activeSender,
+          to: email,
+          subject,
+          html,
+          ...(text ? { text } : {}),
+        });
+        data = retryRes.data;
+        error = retryRes.error;
+      }
+
+      if (error) {
+        const errorMsg = error.message || JSON.stringify(error);
+        results.push({ email, success: false, error: errorMsg, code: error.name || error.statusCode });
+        addLog('fail', `Resend Email failed for ${email}: ${errorMsg}`, {
+          email,
+          error,
+          from: activeSender,
+          contextTag,
+          ...metadata,
+        });
+      } else {
+        results.push({ email, success: true, id: data?.id });
+        addLog('success', `Resend Email delivered to ${email}. MessageId: ${data?.id}`, {
+          email,
+          messageId: data?.id,
+          from: activeSender,
+          contextTag,
+          ...metadata,
+        });
+      }
+    } catch (err) {
+      results.push({ email, success: false, error: err.message });
+      addLog('fail', `Resend Email exception for ${email}: ${err.message}`, {
+        email,
+        error: err.message,
+        from: activeSender,
+        contextTag,
+        ...metadata,
+      });
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    return { success: successCount > 0, delivered: successCount, total: 1, results };
+  }
+
+  // Bulk processing in chunks of up to 100 emails
+  for (let i = 0; i < validRecipients.length; i += BATCH_SIZE) {
+    const chunk = validRecipients.slice(i, i + BATCH_SIZE);
+    let activeSender = primarySender;
+
+    try {
+      const buildBatchPayload = (sender) =>
+        chunk.map(email => ({
+          from: sender,
+          to: email,
+          subject,
+          html,
+          ...(text ? { text } : {}),
+        }));
+
+      let response = null;
+      if (typeof client.batch?.send === 'function') {
+        response = await client.batch.send(buildBatchPayload(activeSender), {
+          batchValidation: 'permissive',
+        });
+
+        // If domain 403 unverified, auto-retry batch with sandbox sender
+        if (
+          response?.error &&
+          (response.error.statusCode === 403 || response.error.name === 'validation_error') &&
+          activeSender !== DEFAULT_FALLBACK_FROM
+        ) {
+          addLog('info', `Resend Batch: Sender "${activeSender}" unverified. Retrying batch of ${chunk.length} with "${DEFAULT_FALLBACK_FROM}"...`, {
+            chunkSize: chunk.length,
+            contextTag,
+          });
+          activeSender = DEFAULT_FALLBACK_FROM;
+          response = await client.batch.send(buildBatchPayload(activeSender), {
+            batchValidation: 'permissive',
+          });
+        }
+      }
+
+      // Check if batch succeeded
+      if (response && !response.error && response.data) {
+        // Resend batch response structure: { data: [ { id: '...' } ], errors?: [ { index: 0, message: '...' } ] }
+        const resData = response.data;
+        const sentItems = Array.isArray(resData.data) ? resData.data : (Array.isArray(resData) ? resData : []);
+        const failedErrors = Array.isArray(resData.errors) ? resData.errors : [];
+        const errorMap = new Map(failedErrors.map(e => [e.index, e.message]));
+
+        chunk.forEach((email, idx) => {
+          if (errorMap.has(idx)) {
+            const errStr = errorMap.get(idx);
+            results.push({ email, success: false, error: errStr });
+            addLog('fail', `Resend Email failed for ${email}: ${errStr}`, {
+              email,
+              error: errStr,
+              from: activeSender,
+              contextTag,
+              ...metadata,
+            });
+          } else {
+            const messageId = sentItems[idx]?.id || `batch-${Date.now()}-${idx}`;
+            results.push({ email, success: true, id: messageId });
+            addLog('success', `Resend Email delivered to ${email}. MessageId: ${messageId}`, {
+              email,
+              messageId,
+              from: activeSender,
+              contextTag,
+              ...metadata,
+            });
+          }
+        });
+      } else {
+        const batchErrorObj = response?.error;
+        const batchErrorMsg = batchErrorObj ? (batchErrorObj.message || JSON.stringify(batchErrorObj)) : 'Batch API unavailable';
+        const isAuthError = batchErrorObj && (batchErrorObj.statusCode === 401 || batchErrorObj.name === 'missing_api_key' || batchErrorMsg.toLowerCase().includes('api key') || batchErrorMsg.toLowerCase().includes('unauthorized'));
+
+        if (isAuthError) {
+          addLog('fail', `Resend Batch authentication error: ${batchErrorMsg}`, {
+            chunkSize: chunk.length,
+            contextTag,
+            ...metadata,
+          });
+          chunk.forEach(email => {
+            results.push({ email, success: false, error: batchErrorMsg });
+          });
+        } else {
+          // Fallback to micro-concurrent dispatch for transient batch API issues
+          addLog('info', `Resend Batch fallback engaged: ${batchErrorMsg}. Dispatching micro-batches...`, {
+            chunkSize: chunk.length,
+            contextTag,
+          });
+
+          // Send micro-chunks of 5 concurrently with 300ms delays to respect rate-limits
+          const microChunkSize = 5;
+          for (let m = 0; m < chunk.length; m += microChunkSize) {
+            const microChunk = chunk.slice(m, m + microChunkSize);
+            await Promise.allSettled(
+              microChunk.map(async (email) => {
+                try {
+                  let singleRes = await client.emails.send({
+                    from: activeSender,
+                    to: email,
+                    subject,
+                    html,
+                    ...(text ? { text } : {}),
+                  });
+                  if (
+                    singleRes.error &&
+                    (singleRes.error.statusCode === 403 || singleRes.error.name === 'validation_error') &&
+                    activeSender !== DEFAULT_FALLBACK_FROM
+                  ) {
+                    activeSender = DEFAULT_FALLBACK_FROM;
+                    singleRes = await client.emails.send({
+                      from: activeSender,
+                      to: email,
+                      subject,
+                      html,
+                      ...(text ? { text } : {}),
+                    });
+                  }
+
+                  if (singleRes.error) {
+                    const errorMsg = singleRes.error.message || JSON.stringify(singleRes.error);
+                    results.push({ email, success: false, error: errorMsg });
+                    addLog('fail', `Resend Email failed for ${email}: ${errorMsg}`, {
+                      email,
+                      from: activeSender,
+                      contextTag,
+                      ...metadata,
+                    });
+                  } else {
+                    results.push({ email, success: true, id: singleRes.data?.id });
+                    addLog('success', `Resend Email delivered to ${email}. MessageId: ${singleRes.data?.id}`, {
+                      email,
+                      messageId: singleRes.data?.id,
+                      from: activeSender,
+                      contextTag,
+                      ...metadata,
+                    });
+                  }
+                } catch (singleErr) {
+                  results.push({ email, success: false, error: singleErr.message });
+                  addLog('fail', `Resend Email exception for ${email}: ${singleErr.message}`, {
+                    email,
+                    from: activeSender,
+                    contextTag,
+                    ...metadata,
+                  });
+                }
+              })
+            );
+
+            if (m + microChunkSize < chunk.length) {
+              await new Promise(r => setTimeout(r, 300));
+            }
+          }
+        }
+      }
+    } catch (chunkErr) {
+      addLog('fail', `Resend Batch exception for chunk starting at ${i}: ${chunkErr.message}`, {
+        chunkSize: chunk.length,
+        contextTag,
+        ...metadata,
+      });
+      chunk.forEach(email => {
+        results.push({ email, success: false, error: chunkErr.message });
+      });
+    }
+
+    // Inter-batch pacing to stay within rate limits for very large classes
+    if (i + BATCH_SIZE < validRecipients.length) {
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
+  const successCount = results.filter(r => r.success).length;
+  addLog(
+    successCount > 0 ? (successCount === validRecipients.length ? 'success' : 'fail') : 'fail',
+    `Resend Email: Delivered ${successCount}/${validRecipients.length} recipients for "${contextTag}"`,
+    { contextTag, from: primarySender, ...metadata, totalRecipients: validRecipients.length, successCount }
+  );
+
+  return { success: successCount > 0, delivered: successCount, total: validRecipients.length, results };
+}
+
+/**
+ * Sends meeting live or scheduled email to an attendee or list of attendees via Resend batch API
+ */
+async function dispatchResendBatchEmails({
+  client,
+  recipients,
+  subject,
+  html,
+  text = null,
+  contextTag = 'Batch Email',
+  metadata = {},
+}) {
+  const validRecipients = Array.from(
+    new Set(
+      (recipients || [])
+        .filter(Boolean)
+        .map(e => (typeof e === 'string' ? e.trim().toLowerCase() : ''))
+        .filter(e => e.length > 0 && e.includes('@'))
+    )
+  );
+
+  if (validRecipients.length === 0) {
+    return { success: false, reason: 'No valid recipient email addresses', delivered: 0, total: 0, results: [] };
+  }
+
+  const primarySender = getSenderEmail();
+  const results = [];
+
+  // Optimized fast-path for single recipient
+  if (validRecipients.length === 1) {
+    const email = validRecipients[0];
+    let activeSender = primarySender;
+    try {
+      let { data, error } = await client.emails.send({
+        from: activeSender,
+        to: email,
+        subject,
+        html,
+        ...(text ? { text } : {}),
+      });
+
+      // Domain unverified fallback for single email
+      if (
+        error &&
+        (error.statusCode === 403 || error.name === 'validation_error') &&
+        activeSender !== DEFAULT_FALLBACK_FROM
+      ) {
+        addLog('info', `Resend: Sender "${activeSender}" unverified. Retrying single email with sandbox sender "${DEFAULT_FALLBACK_FROM}"...`, {
+          email,
+          contextTag,
+        });
+        activeSender = DEFAULT_FALLBACK_FROM;
+        const retryRes = await client.emails.send({
+          from: activeSender,
+          to: email,
+          subject,
+          html,
+          ...(text ? { text } : {}),
+        });
+        data = retryRes.data;
+        error = retryRes.error;
+      }
+
+      if (error) {
+        const errorMsg = error.message || JSON.stringify(error);
+        results.push({ email, success: false, error: errorMsg, code: error.name || error.statusCode });
+        addLog('fail', `Resend Email failed for ${email}: ${errorMsg}`, {
+          email,
+          error,
+          from: activeSender,
+          contextTag,
+          ...metadata,
+        });
+      } else {
+        results.push({ email, success: true, id: data?.id });
+        addLog('success', `Resend Email delivered to ${email}. MessageId: ${data?.id}`, {
+          email,
+          messageId: data?.id,
+          from: activeSender,
+          contextTag,
+          ...metadata,
+        });
+      }
+    } catch (err) {
+      results.push({ email, success: false, error: err.message });
+      addLog('fail', `Resend Email exception for ${email}: ${err.message}`, {
+        email,
+        error: err.message,
+        from: activeSender,
+        contextTag,
+        ...metadata,
+      });
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    return { success: successCount > 0, delivered: successCount, total: 1, results };
+  }
+
+  // Bulk processing in chunks of up to 100 emails
+  for (let i = 0; i < validRecipients.length; i += BATCH_SIZE) {
+    const chunk = validRecipients.slice(i, i + BATCH_SIZE);
+    let activeSender = primarySender;
+
+    try {
+      const buildBatchPayload = (sender) =>
+        chunk.map(email => ({
+          from: sender,
+          to: email,
+          subject,
+          html,
+          ...(text ? { text } : {}),
+        }));
+
+      let response = null;
+      if (typeof client.batch?.send === 'function') {
+        response = await client.batch.send(buildBatchPayload(activeSender), {
+          batchValidation: 'permissive',
+        });
+
+        // If domain 403 unverified, auto-retry batch with sandbox sender
+        if (
+          response?.error &&
+          (response.error.statusCode === 403 || response.error.name === 'validation_error') &&
+          activeSender !== DEFAULT_FALLBACK_FROM
+        ) {
+          addLog('info', `Resend Batch: Sender "${activeSender}" unverified. Retrying batch of ${chunk.length} with "${DEFAULT_FALLBACK_FROM}"...`, {
+            chunkSize: chunk.length,
+            contextTag,
+          });
+          activeSender = DEFAULT_FALLBACK_FROM;
+          response = await client.batch.send(buildBatchPayload(activeSender), {
+            batchValidation: 'permissive',
+          });
+        }
+      }
+
+      // Check if batch succeeded
+      if (response && !response.error && response.data) {
+        // Resend batch response structure: { data: [ { id: '...' } ], errors?: [ { index: 0, message: '...' } ] }
+        const resData = response.data;
+        const sentItems = Array.isArray(resData.data) ? resData.data : (Array.isArray(resData) ? resData : []);
+        const failedErrors = Array.isArray(resData.errors) ? resData.errors : [];
+        const errorMap = new Map(failedErrors.map(e => [e.index, e.message]));
+
+        chunk.forEach((email, idx) => {
+          if (errorMap.has(idx)) {
+            const errStr = errorMap.get(idx);
+            results.push({ email, success: false, error: errStr });
+            addLog('fail', `Resend Email failed for ${email}: ${errStr}`, {
+              email,
+              error: errStr,
+              from: activeSender,
+              contextTag,
+              ...metadata,
+            });
+          } else {
+            const messageId = sentItems[idx]?.id || `batch-${Date.now()}-${idx}`;
+            results.push({ email, success: true, id: messageId });
+            addLog('success', `Resend Email delivered to ${email}. MessageId: ${messageId}`, {
+              email,
+              messageId,
+              from: activeSender,
+              contextTag,
+              ...metadata,
+            });
+          }
+        });
+      } else {
+        // Batch API returned an error or is unavailable: Fallback to micro-concurrent dispatch
+        const batchError = response?.error ? (response.error.message || JSON.stringify(response.error)) : 'Batch API unavailable';
+        addLog('info', `Resend Batch fallback engaged: ${batchError}. Dispatching micro-batches...`, {
+          chunkSize: chunk.length,
+          contextTag,
+        });
+
+        // Send micro-chunks of 5 concurrently with 300ms delays to respect rate-limits
+        const microChunkSize = 5;
+        for (let m = 0; m < chunk.length; m += microChunkSize) {
+          const microChunk = chunk.slice(m, m + microChunkSize);
+          await Promise.allSettled(
+            microChunk.map(async (email) => {
+              try {
+                let singleRes = await client.emails.send({
+                  from: activeSender,
+                  to: email,
+                  subject,
+                  html,
+                  ...(text ? { text } : {}),
+                });
+                if (
+                  singleRes.error &&
+                  (singleRes.error.statusCode === 403 || singleRes.error.name === 'validation_error') &&
+                  activeSender !== DEFAULT_FALLBACK_FROM
+                ) {
+                  activeSender = DEFAULT_FALLBACK_FROM;
+                  singleRes = await client.emails.send({
+                    from: activeSender,
+                    to: email,
+                    subject,
+                    html,
+                    ...(text ? { text } : {}),
+                  });
+                }
+
+                if (singleRes.error) {
+                  const errorMsg = singleRes.error.message || JSON.stringify(singleRes.error);
+                  results.push({ email, success: false, error: errorMsg });
+                  addLog('fail', `Resend Email failed for ${email}: ${errorMsg}`, {
+                    email,
+                    from: activeSender,
+                    contextTag,
+                    ...metadata,
+                  });
+                } else {
+                  results.push({ email, success: true, id: singleRes.data?.id });
+                  addLog('success', `Resend Email delivered to ${email}. MessageId: ${singleRes.data?.id}`, {
+                    email,
+                    messageId: singleRes.data?.id,
+                    from: activeSender,
+                    contextTag,
+                    ...metadata,
+                  });
+                }
+              } catch (singleErr) {
+                results.push({ email, success: false, error: singleErr.message });
+                addLog('fail', `Resend Email exception for ${email}: ${singleErr.message}`, {
+                  email,
+                  from: activeSender,
+                  contextTag,
+                  ...metadata,
+                });
+              }
+            })
+          );
+
+          if (m + microChunkSize < chunk.length) {
+            await new Promise(r => setTimeout(r, 300));
+          }
+        }
+      }
+    } catch (chunkErr) {
+      addLog('fail', `Resend Batch exception for chunk starting at ${i}: ${chunkErr.message}`, {
+        chunkSize: chunk.length,
+        contextTag,
+        ...metadata,
+      });
+      chunk.forEach(email => {
+        results.push({ email, success: false, error: chunkErr.message });
+      });
+    }
+
+    // Inter-batch pacing to stay within rate limits for very large classes
+    if (i + BATCH_SIZE < validRecipients.length) {
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
+  const successCount = results.filter(r => r.success).length;
+  addLog(
+    successCount > 0 ? (successCount === validRecipients.length ? 'success' : 'fail') : 'fail',
+    `Resend Email: Delivered ${successCount}/${validRecipients.length} recipients for "${contextTag}"`,
+    { contextTag, from: primarySender, ...metadata, totalRecipients: validRecipients.length, successCount }
+  );
+
+  return { success: successCount > 0, delivered: successCount, total: validRecipients.length, results };
+}
+
+/**
+ * Sends meeting live or scheduled email to an attendee or list of attendees via Resend batch API
  */
 export async function sendSessionAlertEmail({
   recipients,
@@ -97,9 +654,6 @@ export async function sendSessionAlertEmail({
   if (!client || !recipients || recipients.length === 0) {
     return { success: false, reason: 'Resend client not configured or recipient list empty' };
   }
-
-  const validRecipients = Array.from(new Set(recipients.filter(Boolean)));
-  if (validRecipients.length === 0) return { success: false, reason: 'No valid recipient emails' };
 
   const isLive = alertType === 'session_live';
   const title = isLive ? `🔴 Meeting Live: ${sessionTitle}` : `📅 Meeting Scheduled: ${sessionTitle}`;
@@ -156,53 +710,19 @@ export async function sendSessionAlertEmail({
     </p>
   `;
 
-  const results = [];
-  for (const email of validRecipients) {
-    try {
-      const { data, error } = await client.emails.send({
-        from: getSenderEmail(),
-        to: email,
-        subject: title,
-        html: wrapHtml(title, preheader, bodyHtml, {
-          text: isLive ? 'Open App & Check In Now' : 'View Session Details',
-          url: appUrl,
-        }),
-      });
+  const html = wrapHtml(title, preheader, bodyHtml, {
+    text: isLive ? 'Open App & Check In Now' : 'View Session Details',
+    url: appUrl,
+  });
 
-      if (error) {
-        const errorMsg = error.message || JSON.stringify(error);
-        results.push({ email, success: false, error: errorMsg, code: error.name || error.statusCode });
-        addLog('fail', `Resend Email failed for ${email}: ${errorMsg}`, {
-          email,
-          error,
-          from: getSenderEmail(),
-        });
-      } else {
-        results.push({ email, success: true, id: data?.id });
-        addLog('success', `Resend Email delivered to ${email}. MessageId: ${data?.id}`, {
-          email,
-          messageId: data?.id,
-          from: getSenderEmail(),
-        });
-      }
-    } catch (err) {
-      results.push({ email, success: false, error: err.message });
-      addLog('fail', `Resend Email exception for ${email}: ${err.message}`, {
-        email,
-        error: err.message,
-        from: getSenderEmail(),
-      });
-    }
-  }
-
-  const successCount = results.filter(r => r.success).length;
-  addLog(
-    successCount > 0 ? (successCount === validRecipients.length ? 'success' : 'fail') : 'fail',
-    `Resend Email: Delivered ${successCount}/${validRecipients.length} recipients for "${sessionTitle}"`,
-    { alertType, sessionTitle, from: getSenderEmail(), results }
-  );
-
-  return { success: successCount > 0, delivered: successCount, total: validRecipients.length, results };
+  return await dispatchResendBatchEmails({
+    client,
+    recipients,
+    subject: title,
+    html,
+    contextTag: `Session: ${sessionTitle}`,
+    metadata: { alertType, sessionTitle, room, coordinatorName },
+  });
 }
 
 /**
@@ -252,9 +772,10 @@ export async function sendCorrectionDecisionEmail({
     </p>
   `;
 
+  let sendFrom = getSenderEmail();
   try {
-    const { data, error } = await client.emails.send({
-      from: getSenderEmail(),
+    let { data, error } = await client.emails.send({
+      from: sendFrom,
       to,
       subject: title,
       html: wrapHtml(title, preheader, bodyHtml, {
@@ -263,12 +784,34 @@ export async function sendCorrectionDecisionEmail({
       }),
     });
 
+    if (
+      error &&
+      (error.statusCode === 403 || error.name === 'validation_error') &&
+      sendFrom !== DEFAULT_FALLBACK_FROM
+    ) {
+      addLog('info', `Resend: Sender "${sendFrom}" unverified. Retrying correction decision with "${DEFAULT_FALLBACK_FROM}"...`, {
+        to,
+      });
+      sendFrom = DEFAULT_FALLBACK_FROM;
+      const retryRes = await client.emails.send({
+        from: sendFrom,
+        to,
+        subject: title,
+        html: wrapHtml(title, preheader, bodyHtml, {
+          text: 'View Attendance History',
+          url: `${appUrl}/student/history`,
+        }),
+      });
+      data = retryRes.data;
+      error = retryRes.error;
+    }
+
     if (error) {
       const errorMsg = error.message || JSON.stringify(error);
       addLog('fail', `Resend Email: Failed sending correction decision to ${to}: ${errorMsg}`, {
         to,
         error,
-        from: getSenderEmail(),
+        from: sendFrom,
       });
       return { success: false, error: errorMsg };
     }
@@ -277,14 +820,14 @@ export async function sendCorrectionDecisionEmail({
       to,
       status,
       messageId: data?.id,
-      from: getSenderEmail(),
+      from: sendFrom,
     });
     return { success: true, messageId: data?.id };
   } catch (err) {
     addLog('fail', `Resend Email: Exception sending correction decision to ${to}: ${err.message}`, {
       to,
       error: err.message,
-      from: getSenderEmail(),
+      from: sendFrom,
     });
     return { success: false, error: err.message };
   }
@@ -310,19 +853,39 @@ export async function sendTestEmail(toEmail) {
     </div>
   `;
 
-  const { data, error } = await client.emails.send({
-    from: getSenderEmail(),
+  let sendFrom = getSenderEmail();
+  let { data, error } = await client.emails.send({
+    from: sendFrom,
     to: toEmail,
     subject: title,
     html: wrapHtml(title, preheader, bodyHtml),
   });
+
+  if (
+    error &&
+    (error.statusCode === 403 || error.name === 'validation_error') &&
+    sendFrom !== DEFAULT_FALLBACK_FROM
+  ) {
+    addLog('info', `Resend: Sender "${sendFrom}" unverified. Retrying test email with sandbox sender "${DEFAULT_FALLBACK_FROM}"...`, {
+      to: toEmail,
+    });
+    sendFrom = DEFAULT_FALLBACK_FROM;
+    const retryRes = await client.emails.send({
+      from: sendFrom,
+      to: toEmail,
+      subject: title,
+      html: wrapHtml(title, preheader, bodyHtml),
+    });
+    data = retryRes.data;
+    error = retryRes.error;
+  }
 
   if (error) {
     const errorMsg = error.message || JSON.stringify(error);
     addLog('fail', `Resend Email: Test email to ${toEmail} rejected: ${errorMsg}`, {
       to: toEmail,
       error,
-      from: getSenderEmail(),
+      from: sendFrom,
     });
     throw new Error(errorMsg);
   }
@@ -330,14 +893,14 @@ export async function sendTestEmail(toEmail) {
   addLog('success', `Resend Email: Test email sent to ${toEmail}. MessageId: ${data?.id}`, {
     to: toEmail,
     messageId: data?.id,
-    from: getSenderEmail(),
+    from: sendFrom,
   });
 
-  return { success: true, messageId: data?.id, from: getSenderEmail() };
+  return { success: true, messageId: data?.id, from: sendFrom };
 }
 
 /**
- * Sends check-in / check-out / dispute alert email to coordinators
+ * Sends check-in / check-out / dispute alert email to coordinators via Resend batch API
  */
 export async function sendCoordinatorAlertEmail({
   recipients,
@@ -351,9 +914,6 @@ export async function sendCoordinatorAlertEmail({
   if (!client || !recipients || recipients.length === 0) {
     return { success: false, reason: 'Resend not configured or empty recipients' };
   }
-
-  const validRecipients = Array.from(new Set(recipients.filter(Boolean)));
-  if (validRecipients.length === 0) return { success: false, reason: 'No valid recipient emails' };
 
   let title = `Lab Alert: ${studentName || 'Attendee'}`;
   if (type === 'checkin') {
@@ -379,51 +939,54 @@ export async function sendCoordinatorAlertEmail({
     </div>
   `;
 
-  const results = [];
-  for (const email of validRecipients) {
-    try {
-      const { data, error } = await client.emails.send({
-        from: getSenderEmail(),
-        to: email,
-        subject: title,
-        html: wrapHtml(title, preheader, bodyHtml, {
-          text: 'Open Coordinator Dashboard',
-          url: `${appUrl}/coordinator`,
-        }),
-      });
+  const html = wrapHtml(title, preheader, bodyHtml, {
+    text: 'Open Coordinator Dashboard',
+    url: `${appUrl}/coordinator`,
+  });
 
-      if (error) {
-        const errorMsg = error.message || JSON.stringify(error);
-        results.push({ email, success: false, error: errorMsg, code: error.name || error.statusCode });
-        addLog('fail', `Resend Email: Coordinator alert to ${email} rejected: ${errorMsg}`, {
-          email,
-          error,
-          from: getSenderEmail(),
-        });
-      } else {
-        results.push({ email, success: true, id: data?.id });
-        addLog('success', `Resend Email: Coordinator alert delivered to ${email}. MessageId: ${data?.id}`, {
-          email,
-          messageId: data?.id,
-          from: getSenderEmail(),
-        });
-      }
-    } catch (err) {
-      results.push({ email, success: false, error: err.message });
-      addLog('fail', `Resend Email: Coordinator alert exception for ${email}: ${err.message}`, {
-        email,
-        error: err.message,
-        from: getSenderEmail(),
-      });
-    }
+  return await dispatchResendBatchEmails({
+    client,
+    recipients,
+    subject: title,
+    html,
+    contextTag: `Coordinator Alert: ${type}`,
+    metadata: { type, studentName, sessionTitle, status },
+  });
+}
+
+/**
+ * Broadcasts a custom announcement or notification to a list of recipients via Resend batch API
+ */
+export async function sendBulkBroadcastEmail({
+  recipients,
+  subject,
+  title,
+  message,
+  actionButton = null,
+  appUrl = 'https://labs-pyi3.onrender.com',
+}) {
+  const client = getResendClient();
+  if (!client || !recipients || recipients.length === 0) {
+    return { success: false, reason: 'Resend not configured or empty recipients' };
   }
 
-  const successCount = results.filter(r => r.success).length;
-  addLog(
-    successCount > 0 ? (successCount === validRecipients.length ? 'success' : 'fail') : 'fail',
-    `Resend Email: Sent coordinator alert (${type}) to ${successCount}/${validRecipients.length} coordinator(s)`,
-    { type, studentName, sessionTitle, from: getSenderEmail(), results }
-  );
+  const heading = title || subject || 'Innovations Lab Announcement';
+  const preheader = (message || '').replace(/<[^>]*>?/gm, '').substring(0, 120);
 
-  return { success: successCount > 0, delivered: successCount, total: validRecipients.length, results };
+  const bodyHtml = `
+    <div style="font-size: 15px; line-height: 24px; color: #334155; margin: 0 0 16px;">
+      ${message}
+    </div>
+  `;
+
+  const html = wrapHtml(heading, preheader, bodyHtml, actionButton);
+
+  return await dispatchResendBatchEmails({
+    client,
+    recipients,
+    subject,
+    html,
+    contextTag: `Broadcast: ${heading}`,
+    metadata: { subject, title: heading },
+  });
 }
