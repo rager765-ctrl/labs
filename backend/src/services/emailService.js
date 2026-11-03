@@ -46,55 +46,142 @@ export function getSenderEmail() {
  * Base email wrapper template with clean modern styles matching Innovations Lab tokens
  */
 function wrapHtml(title, preheader, bodyHtml, actionButton = null, brandName = 'Innovations Lab') {
+  const ctaButtonHtml = actionButton && actionButton.url ? `
+    <div style="margin-top: 22px; text-align: left;">
+      <a href="${actionButton.url}" target="_blank" style="display: inline-block; background-color: #000000; color: #f1ffd2; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13.5px; font-weight: 700; text-decoration: none; padding: 12px 26px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.18); letter-spacing: 0.02em;">
+        ${actionButton.text ? (actionButton.text.includes('↗') || actionButton.text.includes('↓') ? actionButton.text : actionButton.text + ' ↗') : 'View Details ↗'}
+      </a>
+    </div>
+  ` : '';
+
   return `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1E293B;">
+<body style="margin: 0; padding: 0; background-color: #f4f3ee; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
   <span style="display: none; max-height: 0px; overflow: hidden;">${preheader}</span>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #F8FAFC; padding: 32px 16px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f4f3ee; padding: 32px 12px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" style="max-width: 580px; background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.04);">
-          <!-- Header -->
+        <!-- Main Email Container -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; background-color: #ffffff; border-radius: 14px; border: 1px solid #e5e7eb; overflow: hidden; box-shadow: 0 10px 36px rgba(0,0,0,0.06);">
+          
+          <!-- Top App Bar with Glassmorphic styling & Co-hosts -->
           <tr>
-            <td style="background-color: #0F172A; padding: 24px 32px; text-align: left;">
-              <div style="font-size: 11px; font-weight: 700; color: #38BDF8; letter-spacing: 0.08em; text-transform: uppercase;">
-                ${brandName}
+            <td style="background-color: #ffffff; border-bottom: 1px solid #e5e7eb; padding: 16px 24px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="left" style="vertical-align: middle;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="vertical-align: middle; padding-right: 8px;">
+                          <div style="width: 24px; height: 24px; border-radius: 4px; background-color: #000000; color: #f1ffd2; font-size: 12px; font-weight: 800; line-height: 24px; text-align: center;">✦</div>
+                        </td>
+                        <td style="vertical-align: middle; font-weight: 900; font-size: 15px; letter-spacing: -0.03em; color: #000000; padding-right: 8px;">
+                          HATCHPOINT
+                        </td>
+                        <td style="vertical-align: middle;">
+                          <span style="background-color: #f1ffd2; color: #004012; font-family: monospace; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(0,64,18,0.2);">NYANSAPO</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td align="right" style="vertical-align: middle; font-family: monospace; font-size: 10.5px; font-weight: 700; color: #64748b;">
+                    KNUST &bull; KSB LAB
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Hero Section with Vector Tech Glyph -->
+          <tr>
+            <td style="background-color: #ffffff; padding: 28px 24px 20px; border-bottom: 1px solid #f1f5f9;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="vertical-align: top;">
+                    <!-- Category Badge -->
+                    <div style="margin-bottom: 8px;">
+                      <span style="background-color: #ede9fe; color: #4a17b0; font-family: monospace; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; letter-spacing: 0.06em;">03 // OFFICIAL DISPATCH</span>
+                    </div>
+
+                    <!-- Heading -->
+                    <h1 style="margin: 0 0 6px 0; color: #000000; font-size: 23px; font-weight: 900; line-height: 1.2; letter-spacing: -0.03em;">
+                      ${title}
+                    </h1>
+
+                    <!-- Sender Subtitle -->
+                    <div style="font-family: monospace; font-size: 10.5px; font-weight: 700; color: #787882; text-transform: uppercase; letter-spacing: 0.06em;">
+                      ${brandName}
+                    </div>
+                  </td>
+                  <td align="right" style="vertical-align: top; width: 72px; padding-left: 12px;">
+                    <!-- Vector Tech Glyph from Photo -->
+                    <svg width="68" height="68" viewBox="0 0 100 100" fill="none" style="display: block;">
+                      <path d="M50 8 C68 8 82 22 82 40 C82 48 78 56 72 62 C78 68 82 76 82 84 C82 92 68 96 50 96 C32 96 18 92 18 84 C18 76 22 68 28 62 C22 56 18 48 18 40 C18 22 32 8 50 8 Z" fill="#6120ee"/>
+                      <circle cx="50" cy="52" r="15" fill="#99ecff"/>
+                      <circle cx="82" cy="24" r="10" fill="#6120ee"/>
+                    </svg>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Themed Highlight Card -->
+          <tr>
+            <td style="padding: 20px 24px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #d0f2fe; border: 1px solid #bae6fd; border-radius: 12px;">
+                <tr>
+                  <td style="padding: 22px 22px 20px;">
+                    <!-- Card Top Strip with Stepped Pixel Motif -->
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-bottom: 1px dashed rgba(0,0,0,0.14); padding-bottom: 8px; margin-bottom: 12px;">
+                      <tr>
+                        <td align="left" style="font-size: 12px; font-weight: 800; color: #000000; letter-spacing: 0.04em;">
+                          THE NYANSAPO CHALLENGE
+                        </td>
+                        <td align="right">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                            <rect width="6" height="6" x="2" y="2" fill="#6120ee"/>
+                            <rect width="6" height="6" x="16" y="2" fill="#00d5ff"/>
+                            <rect width="6" height="6" x="9" y="9" fill="#000000"/>
+                            <rect width="6" height="6" x="2" y="16" fill="#00d5ff"/>
+                            <rect width="6" height="6" x="16" y="16" fill="#6120ee"/>
+                          </svg>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <div style="font-size: 14px; line-height: 1.6; color: #0c4a6e;">
+                      ${bodyHtml}
+                    </div>
+
+                    ${ctaButtonHtml}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Minimal Architectural Footer -->
+          <tr>
+            <td style="background-color: #f4f3ee; border-top: 1px solid #e5e7eb; padding: 18px 24px; text-align: center;">
+              <div style="font-family: monospace; font-size: 10.5px; font-weight: 700; color: #000000; letter-spacing: 0.04em; margin-bottom: 4px;">
+                KSB INNOVATIONS LAB &times; KNUST SCHOOL OF BUSINESS
               </div>
-              <h1 style="margin: 6px 0 0; color: #FFFFFF; font-size: 20px; font-weight: 700; line-height: 26px;">
-                ${title}
-              </h1>
+              <div style="font-size: 10px; color: #787882; font-family: monospace; margin-bottom: 6px;">
+                &copy; 2026 THE HATCHPOINT INNOVATIONS CHALLENGE: NYANSAPO EDITION &bull; KUMASI, GHANA
+              </div>
+              <div style="font-size: 9.5px; color: #a1a1aa;">
+                Sent via Verified Innovations Lab Notification Engine &bull; Official Dispatch
+              </div>
             </td>
           </tr>
-          <!-- Body Content -->
-          <tr>
-            <td style="padding: 32px;">
-              ${bodyHtml}
-              ${
-                actionButton
-                  ? `
-                <div style="margin-top: 32px; text-align: center;">
-                  <a href="${actionButton.url}" style="display: inline-block; background-color: #2563EB; color: #FFFFFF; font-weight: 600; font-size: 14px; text-decoration: none; padding: 12px 28px; border-radius: 8px; box-shadow: 0 2px 4px rgba(37,99,235,0.2);">
-                    ${actionButton.text}
-                  </a>
-                </div>
-              `
-                  : ''
-              }
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="padding: 20px 32px; background-color: #F8FAFC; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; text-align: center; line-height: 18px;">
-              This is an automated notification from ${brandName}.<br>
-              To change your email preferences, visit your profile in the app.
-            </td>
-          </tr>
+
         </table>
       </td>
     </tr>
@@ -693,9 +780,10 @@ export async function sendBulkBroadcastEmail({
   recipients,
   subject,
   title,
-  message,
+  message = '',
   senderName = null,
   actionButton = null,
+  html = null,
   appUrl = 'https://labs-pyi3.onrender.com',
 }) {
   const client = getResendClient();
@@ -707,27 +795,33 @@ export async function sendBulkBroadcastEmail({
   const heading = title || subject || `${brand} Announcement`;
   const preheader = (message || '').replace(/<[^>]*>?/gm, '').substring(0, 120);
 
-  const isHtml = /<[a-z][\s\S]*>/i.test(message);
-  const formattedBody = isHtml
-    ? message
-    : message
-        .split(/\n{2,}/)
-        .map(p => `<p style="margin: 0 0 16px; font-size: 15px; line-height: 24px; color: #334155;">${p.replace(/\n/g, '<br>')}</p>`)
-        .join('');
+  // If caller provided full custom HTML (e.g. from HatchPoint email builder), use it directly!
+  let finalHtml;
+  if (html && typeof html === 'string' && html.trim().length > 0) {
+    finalHtml = html;
+  } else {
+    const isHtml = /<[a-z][\s\S]*>/i.test(message);
+    const formattedBody = isHtml
+      ? message
+      : (message || '')
+          .split(/\n{2,}/)
+          .map(p => `<p style="margin: 0 0 16px; font-size: 15px; line-height: 24px; color: #334155;">${p.replace(/\n/g, '<br>')}</p>`)
+          .join('');
 
-  const bodyHtml = `
-    <div style="font-size: 15px; line-height: 24px; color: #334155;">
-      ${formattedBody}
-    </div>
-  `;
+    const bodyHtml = `
+      <div style="font-size: 15px; line-height: 24px; color: #334155;">
+        ${formattedBody}
+      </div>
+    `;
 
-  const html = wrapHtml(heading, preheader, bodyHtml, actionButton, brand);
+    finalHtml = wrapHtml(heading, preheader, bodyHtml, actionButton, brand);
+  }
 
   return await dispatchResendBatchEmails({
     client,
     recipients,
     subject: heading,
-    html,
+    html: finalHtml,
     contextTag: `${brand}: ${heading}`,
     metadata: { subject, title: heading, senderName: brand },
   });
