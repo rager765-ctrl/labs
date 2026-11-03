@@ -45,7 +45,7 @@ export function getSenderEmail() {
 /**
  * Base email wrapper template with clean modern styles matching Innovations Lab tokens
  */
-function wrapHtml(title, preheader, bodyHtml, actionButton = null) {
+function wrapHtml(title, preheader, bodyHtml, actionButton = null, brandName = 'Innovations Lab') {
   return `
 <!DOCTYPE html>
 <html>
@@ -64,7 +64,7 @@ function wrapHtml(title, preheader, bodyHtml, actionButton = null) {
           <tr>
             <td style="background-color: #0F172A; padding: 24px 32px; text-align: left;">
               <div style="font-size: 11px; font-weight: 700; color: #38BDF8; letter-spacing: 0.08em; text-transform: uppercase;">
-                Innovations Lab Attendance
+                ${brandName}
               </div>
               <h1 style="margin: 6px 0 0; color: #FFFFFF; font-size: 20px; font-weight: 700; line-height: 26px;">
                 ${title}
@@ -91,8 +91,8 @@ function wrapHtml(title, preheader, bodyHtml, actionButton = null) {
           <!-- Footer -->
           <tr>
             <td style="padding: 20px 32px; background-color: #F8FAFC; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; text-align: center; line-height: 18px;">
-              This is an automated notification from Innovations Lab Attendance system.<br>
-              To change your email preferences, visit your attendee or coordinator profile in the app.
+              This is an automated notification from ${brandName}.<br>
+              To change your email preferences, visit your profile in the app.
             </td>
           </tr>
         </table>
@@ -694,6 +694,7 @@ export async function sendBulkBroadcastEmail({
   subject,
   title,
   message,
+  senderName = null,
   actionButton = null,
   appUrl = 'https://labs-pyi3.onrender.com',
 }) {
@@ -702,23 +703,32 @@ export async function sendBulkBroadcastEmail({
     return { success: false, reason: 'Resend not configured or empty recipients' };
   }
 
-  const heading = title || subject || 'Innovations Lab Announcement';
+  const brand = senderName || 'Innovations Lab';
+  const heading = title || subject || `${brand} Announcement`;
   const preheader = (message || '').replace(/<[^>]*>?/gm, '').substring(0, 120);
 
+  const isHtml = /<[a-z][\s\S]*>/i.test(message);
+  const formattedBody = isHtml
+    ? message
+    : message
+        .split(/\n{2,}/)
+        .map(p => `<p style="margin: 0 0 16px; font-size: 15px; line-height: 24px; color: #334155;">${p.replace(/\n/g, '<br>')}</p>`)
+        .join('');
+
   const bodyHtml = `
-    <div style="font-size: 15px; line-height: 24px; color: #334155; margin: 0 0 16px;">
-      ${message}
+    <div style="font-size: 15px; line-height: 24px; color: #334155;">
+      ${formattedBody}
     </div>
   `;
 
-  const html = wrapHtml(heading, preheader, bodyHtml, actionButton);
+  const html = wrapHtml(heading, preheader, bodyHtml, actionButton, brand);
 
   return await dispatchResendBatchEmails({
     client,
     recipients,
-    subject,
+    subject: heading,
     html,
-    contextTag: `Broadcast: ${heading}`,
-    metadata: { subject, title: heading },
+    contextTag: `${brand}: ${heading}`,
+    metadata: { subject, title: heading, senderName: brand },
   });
 }

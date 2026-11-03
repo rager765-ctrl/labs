@@ -1284,20 +1284,22 @@ router.post('/reconcile', async (req, res) => {
  */
 router.post('/send-bulk-email', async (req, res) => {
   try {
-    const { recipients, subject, title, message, actionButton } = req.body;
-    if (!recipients || (Array.isArray(recipients) && recipients.length === 0)) {
+    const { recipients, to, subject, title, message, senderName, actionButton } = req.body;
+    const targetRecipients = recipients || to;
+    if (!targetRecipients || (Array.isArray(targetRecipients) && targetRecipients.length === 0)) {
       return res.status(400).json({ success: false, error: 'Recipients list is required.' });
     }
     if (!subject || !message) {
       return res.status(400).json({ success: false, error: 'Subject and message are required.' });
     }
 
-    const rawList = Array.isArray(recipients) ? recipients : [recipients];
+    const rawList = Array.isArray(targetRecipients) ? targetRecipients : [targetRecipients];
     const result = await sendBulkBroadcastEmail({
       recipients: rawList,
       subject,
       title: title || subject,
       message,
+      senderName,
       actionButton,
     });
 
