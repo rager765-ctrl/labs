@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'crypto';
 import admin, { messaging, db, isFirebaseInitialized } from '../config/firebase.js';
 import { addLog, getLogs, clearLogs } from '../services/loggerService.js';
 import {
@@ -1317,31 +1318,31 @@ router.post('/send-bulk-email', async (req, res) => {
   }
 });
 
-function getTechXAuth() {
+function getTechXApp() {
   const existing = admin.apps.find((a) => a && a.name === 'techx-judge-portal');
-  if (existing) return existing.auth();
+  if (existing) return existing;
 
   const rawKey = process.env.TECH_X_FIREBASE_SERVICE_ACCOUNT_KEY;
   if (!rawKey) return null;
 
   const serviceAccount = JSON.parse(rawKey.trim());
-  const app = admin.initializeApp(
+  return admin.initializeApp(
     {
       credential: admin.credential.cert(serviceAccount),
       projectId: serviceAccount.project_id || 'the-tech-x',
     },
     'techx-judge-portal'
   );
-  return app.auth();
 }
 
 /**
  * POST /api/notifications/judge-magic-link
- * Generates a Firebase Auth Email Sign-In Link for the-tech-x Judge Portal
+ * Generates a one-time magic login link for the-tech-x Judge Portal
+ * WITHOUT invalidating the judge's email+password credential.
  */
 router.post('/judge-magic-link', async (req, res) => {
   try {
-    const { email, continueUrl, expiryMinutes } = req.body || {};
+    const { email, continueUrl, expiryMinutes, restorePassword } = req.body || {};
     if (!email || !continueUrl) {
       return res.status(400).json({
         success: false,
@@ -1349,8 +1350,8 @@ router.post('/judge-magic-link', async (req, res) => {
       });
     }
 
-    const techXAuth = getTechXAuth();
-    if (!techXAuth) {
+    const techXApp = getTechXApp();
+    if (!techXApp) {
       return res.status(503).json({
         success: false,
         code: 'TECH_X_AUTH_NOT_CONFIGURED',
@@ -1358,26 +1359,91 @@ router.post('/judge-magic-link', async (req, res) => {
       });
     }
 
+    const techXAuth = techXApp.auth();
+    const techXDb = techXApp.firestore();
+    const cleanEmail = email.trim();
+    const userRecord = await techXAuth.getUserByEmail(cleanEmail);
+
+    // If a previous email-link sign-in stripped the password provider, restore it
+    const hasPasswordProvider = (userRecord.providerData || []).some((p) => p.providerId === 'password');
+    if (!hasPasswordProvider && restorePassword && String(restorePassword).length >= 6) {
+      await techXAuth.updateUser(userRecord.uid, { password: String(restorePassword) });
+      addLog('info', `Restored password provider for Judge ${cleanEmail}`);
+    }
+
     const mins = Math.max(5, Number(expiryMinutes) || 360);
     const expiresAt = Date.now() + mins * 60 * 1000;
-    const urlObj = new URL(continueUrl);
-    urlObj.searchParams.set('jpEmail', email.trim());
-    urlObj.searchParams.set('jpExp', String(expiresAt));
+    const magicCode = crypto.randomBytes(24).toString('hex');
 
-    const magicLink = await techXAuth.generateSignInWithEmailLink(email.trim(), {
-      url: urlObj.toString(),
-      handleCodeInApp: true,
+    await techXDb.collection('judge_magic_links').doc(magicCode).set({
+      uid: userRecord.uid,
+      email: cleanEmail,
+      expiresAt,
+      used: false,
+      createdAt: Date.now(),
     });
 
-    addLog('info', `Generated Judge Portal auto-login link for ${email.trim()} (expires in ${mins} mins)`);
+    const urlObj = new URL(continueUrl);
+    urlObj.searchParams.set('jpMagic', magicCode);
+    urlObj.searchParams.set('jpEmail', cleanEmail);
+    urlObj.searchParams.set('jpExp', String(expiresAt));
+
+    addLog('info', `Generated Judge Portal magic link for ${cleanEmail} (expires in ${mins} mins)`);
     return res.json({
       success: true,
-      link: magicLink,
+      link: urlObj.toString(),
       expiresAt,
       expiryMinutes: mins,
     });
   } catch (err) {
     console.error('Error in /api/notifications/judge-magic-link:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/verify-judge-magic
+ * Exchanges a valid one-time jpMagic code for a Firebase Custom Auth Token.
+ */
+router.post('/verify-judge-magic', async (req, res) => {
+  try {
+    const { magicCode } = req.body || {};
+    if (!magicCode) {
+      return res.status(400).json({ success: false, error: 'Missing magicCode.' });
+    }
+
+    const techXApp = getTechXApp();
+    if (!techXApp) {
+      return res.status(503).json({ success: false, error: 'Auth service not configured.' });
+    }
+
+    const techXAuth = techXApp.auth();
+    const techXDb = techXApp.firestore();
+    const linkRef = techXDb.collection('judge_magic_links').doc(String(magicCode));
+    const snap = await linkRef.get();
+
+    if (!snap.exists) {
+      return res.status(404).json({ success: false, code: 'INVALID_LINK', error: 'Invalid or unknown auto-login link.' });
+    }
+
+    const data = snap.data();
+    if (data.used) {
+      return res.status(410).json({ success: false, code: 'LINK_USED', error: 'This auto-login link has already been used.' });
+    }
+    if (!data.expiresAt || Date.now() > data.expiresAt) {
+      return res.status(410).json({ success: false, code: 'LINK_EXPIRED', error: 'This auto-login link has expired.' });
+    }
+
+    await linkRef.update({ used: true, usedAt: Date.now() });
+    const customToken = await techXAuth.createCustomToken(data.uid);
+
+    return res.json({
+      success: true,
+      customToken,
+      email: data.email || '',
+    });
+  } catch (err) {
+    console.error('Error in /api/notifications/verify-judge-magic:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
