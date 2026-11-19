@@ -79,7 +79,7 @@ function wrapHtml(title, preheader, bodyHtml, actionButton = null, brandName = '
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td style="vertical-align: middle; padding-right: 8px;">
-                          <div style="width: 24px; height: 24px; border-radius: 4px; background-color: #000000; color: #f1ffd2; font-size: 12px; font-weight: 800; line-height: 24px; text-align: center;">✦</div>
+                          <img src="${process.env.EMAIL_LOGO_URL || 'https://opokukelvinnanayaw.github.io/hatchtest/logo_hatchpoint_icon.jpg'}" alt="HatchPoint" width="28" height="28" style="width: 28px; height: 28px; border-radius: 6px; object-fit: cover; display: block; border: 1px solid #e5e7eb;">
                         </td>
                         <td style="vertical-align: middle; font-weight: 900; font-size: 15px; letter-spacing: -0.03em; color: #000000; padding-right: 8px;">
                           HATCHPOINT
