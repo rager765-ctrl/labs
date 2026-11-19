@@ -1317,4 +1317,69 @@ router.post('/send-bulk-email', async (req, res) => {
   }
 });
 
+function getTechXAuth() {
+  const existing = admin.apps.find((a) => a && a.name === 'techx-judge-portal');
+  if (existing) return existing.auth();
+
+  const rawKey = process.env.TECH_X_FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!rawKey) return null;
+
+  const serviceAccount = JSON.parse(rawKey.trim());
+  const app = admin.initializeApp(
+    {
+      credential: admin.credential.cert(serviceAccount),
+      projectId: serviceAccount.project_id || 'the-tech-x',
+    },
+    'techx-judge-portal'
+  );
+  return app.auth();
+}
+
+/**
+ * POST /api/notifications/judge-magic-link
+ * Generates a Firebase Auth Email Sign-In Link for the-tech-x Judge Portal
+ */
+router.post('/judge-magic-link', async (req, res) => {
+  try {
+    const { email, continueUrl, expiryMinutes } = req.body || {};
+    if (!email || !continueUrl) {
+      return res.status(400).json({
+        success: false,
+        error: 'Both "email" and "continueUrl" are required.',
+      });
+    }
+
+    const techXAuth = getTechXAuth();
+    if (!techXAuth) {
+      return res.status(503).json({
+        success: false,
+        code: 'TECH_X_AUTH_NOT_CONFIGURED',
+        error: 'TECH_X_FIREBASE_SERVICE_ACCOUNT_KEY is not configured on the mail server.',
+      });
+    }
+
+    const mins = Math.max(5, Number(expiryMinutes) || 360);
+    const expiresAt = Date.now() + mins * 60 * 1000;
+    const urlObj = new URL(continueUrl);
+    urlObj.searchParams.set('jpEmail', email.trim());
+    urlObj.searchParams.set('jpExp', String(expiresAt));
+
+    const magicLink = await techXAuth.generateSignInWithEmailLink(email.trim(), {
+      url: urlObj.toString(),
+      handleCodeInApp: true,
+    });
+
+    addLog('info', `Generated Judge Portal auto-login link for ${email.trim()} (expires in ${mins} mins)`);
+    return res.json({
+      success: true,
+      link: magicLink,
+      expiresAt,
+      expiryMinutes: mins,
+    });
+  } catch (err) {
+    console.error('Error in /api/notifications/judge-magic-link:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
