@@ -1391,11 +1391,10 @@ router.post('/judge-magic-link', async (req, res) => {
     const cleanEmail = email.trim();
     const userRecord = await techXAuth.getUserByEmail(cleanEmail);
 
-    // If a previous email-link sign-in stripped the password provider, restore it
-    const hasPasswordProvider = (userRecord.providerData || []).some((p) => p.providerId === 'password');
-    if (!hasPasswordProvider && restorePassword && String(restorePassword).length >= 6) {
+    // Ensure the judge's password credential matches their current tempPassword
+    if (restorePassword && String(restorePassword).length >= 6) {
       await techXAuth.updateUser(userRecord.uid, { password: String(restorePassword) });
-      addLog('info', `Restored password provider for Judge ${cleanEmail}`);
+      addLog('info', `Synced password credential for Judge ${cleanEmail}`);
     }
 
     const mins = Math.max(5, Number(expiryMinutes) || 360);
