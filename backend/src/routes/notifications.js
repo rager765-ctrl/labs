@@ -1335,10 +1335,38 @@ function getTechXApp() {
   );
 }
 
+const usedMagicJtis = new Map();
+
+function getMagicSigningSecret() {
+  const raw = process.env.TECH_X_MAGIC_SECRET || process.env.TECH_X_FIREBASE_SERVICE_ACCOUNT_KEY || 'techx-fallback-secret';
+  return crypto.createHash('sha256').update(raw).digest();
+}
+
+function signMagicPayload(payload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', getMagicSigningSecret()).update(body).digest('base64url');
+  return `${body}.${sig}`;
+}
+
+function verifyMagicToken(token) {
+  const parts = String(token || '').split('.');
+  if (parts.length !== 2) return null;
+  const [body, sig] = parts;
+  const expectedSig = crypto.createHmac('sha256', getMagicSigningSecret()).update(body).digest('base64url');
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expectedSig);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    return JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * POST /api/notifications/judge-magic-link
- * Generates a one-time magic login link for the-tech-x Judge Portal
- * WITHOUT invalidating the judge's email+password credential.
+ * Generates a signed one-time magic login link for the-tech-x Judge Portal
+ * WITHOUT invalidating the judge's email+password credential and without Firestore writes.
  */
 router.post('/judge-magic-link', async (req, res) => {
   try {
@@ -1360,7 +1388,6 @@ router.post('/judge-magic-link', async (req, res) => {
     }
 
     const techXAuth = techXApp.auth();
-    const techXDb = techXApp.firestore();
     const cleanEmail = email.trim();
     const userRecord = await techXAuth.getUserByEmail(cleanEmail);
 
@@ -1373,14 +1400,12 @@ router.post('/judge-magic-link', async (req, res) => {
 
     const mins = Math.max(5, Number(expiryMinutes) || 360);
     const expiresAt = Date.now() + mins * 60 * 1000;
-    const magicCode = crypto.randomBytes(24).toString('hex');
-
-    await techXDb.collection('judge_magic_links').doc(magicCode).set({
+    const jti = crypto.randomBytes(12).toString('hex');
+    const magicCode = signMagicPayload({
       uid: userRecord.uid,
       email: cleanEmail,
-      expiresAt,
-      used: false,
-      createdAt: Date.now(),
+      exp: expiresAt,
+      jti,
     });
 
     const urlObj = new URL(continueUrl);
@@ -1403,7 +1428,7 @@ router.post('/judge-magic-link', async (req, res) => {
 
 /**
  * POST /api/notifications/verify-judge-magic
- * Exchanges a valid one-time jpMagic code for a Firebase Custom Auth Token.
+ * Exchanges a valid signed jpMagic token for a Firebase Custom Auth Token.
  */
 router.post('/verify-judge-magic', async (req, res) => {
   try {
@@ -1417,30 +1442,32 @@ router.post('/verify-judge-magic', async (req, res) => {
       return res.status(503).json({ success: false, error: 'Auth service not configured.' });
     }
 
-    const techXAuth = techXApp.auth();
-    const techXDb = techXApp.firestore();
-    const linkRef = techXDb.collection('judge_magic_links').doc(String(magicCode));
-    const snap = await linkRef.get();
-
-    if (!snap.exists) {
-      return res.status(404).json({ success: false, code: 'INVALID_LINK', error: 'Invalid or unknown auto-login link.' });
+    const payload = verifyMagicToken(magicCode);
+    if (!payload || !payload.uid) {
+      return res.status(404).json({ success: false, code: 'INVALID_LINK', error: 'Invalid or tampered auto-login link.' });
     }
-
-    const data = snap.data();
-    if (data.used) {
-      return res.status(410).json({ success: false, code: 'LINK_USED', error: 'This auto-login link has already been used.' });
-    }
-    if (!data.expiresAt || Date.now() > data.expiresAt) {
+    if (!payload.exp || Date.now() > payload.exp) {
       return res.status(410).json({ success: false, code: 'LINK_EXPIRED', error: 'This auto-login link has expired.' });
     }
+    if (payload.jti && usedMagicJtis.has(payload.jti)) {
+      return res.status(410).json({ success: false, code: 'LINK_USED', error: 'This auto-login link has already been used.' });
+    }
 
-    await linkRef.update({ used: true, usedAt: Date.now() });
-    const customToken = await techXAuth.createCustomToken(data.uid);
+    // Prune expired JTIs and mark this one used
+    const now = Date.now();
+    for (const [k, expTs] of usedMagicJtis.entries()) {
+      if (now > expTs) usedMagicJtis.delete(k);
+    }
+    if (payload.jti) {
+      usedMagicJtis.set(payload.jti, payload.exp);
+    }
+
+    const customToken = await techXApp.auth().createCustomToken(payload.uid);
 
     return res.json({
       success: true,
       customToken,
-      email: data.email || '',
+      email: payload.email || '',
     });
   } catch (err) {
     console.error('Error in /api/notifications/verify-judge-magic:', err);
