@@ -1448,18 +1448,6 @@ router.post('/verify-judge-magic', async (req, res) => {
     if (!payload.exp || Date.now() > payload.exp) {
       return res.status(410).json({ success: false, code: 'LINK_EXPIRED', error: 'This auto-login link has expired.' });
     }
-    if (payload.jti && usedMagicJtis.has(payload.jti)) {
-      return res.status(410).json({ success: false, code: 'LINK_USED', error: 'This auto-login link has already been used.' });
-    }
-
-    // Prune expired JTIs and mark this one used
-    const now = Date.now();
-    for (const [k, expTs] of usedMagicJtis.entries()) {
-      if (now > expTs) usedMagicJtis.delete(k);
-    }
-    if (payload.jti) {
-      usedMagicJtis.set(payload.jti, payload.exp);
-    }
 
     const customToken = await techXApp.auth().createCustomToken(payload.uid);
 
