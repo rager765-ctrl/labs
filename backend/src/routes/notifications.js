@@ -1483,13 +1483,26 @@ function stripOuterQuotes(val) {
   return s;
 }
 
+function maskSecret(secret) {
+  if (!secret) return '(empty)';
+  if (secret.length <= 6) return `len=${secret.length}`;
+  return `len=${secret.length}, ${secret.slice(0, 3)}...${secret.slice(-3)}`;
+}
+
 function getArkeselConfig() {
-  const rawKey = process.env.ARKESEL_API_KEY || process.env.ARKESEL_SMS_SECRET || '';
+  const secretVal = stripOuterQuotes(process.env.ARKESEL_SMS_SECRET);
+  const apiKeyVal = stripOuterQuotes(process.env.ARKESEL_API_KEY);
+  const keySource = secretVal ? 'ARKESEL_SMS_SECRET' : (apiKeyVal ? 'ARKESEL_API_KEY' : 'none');
+  let apiKey = secretVal || apiKeyVal || '';
+  if (apiKey.toLowerCase().startsWith('api_key=')) {
+    apiKey = apiKey.slice('api_key='.length).trim();
+  }
   const rawUrl = process.env.ARKESEL_SMS_URL || 'https://sms.arkesel.com/api/v2/sms/send';
   const rawSender = process.env.ARKESEL_SENDER_ID || 'HatchPoint';
   const rawWebhook = process.env.ARKESEL_WEBHOOK_SECRET || '';
   return {
-    apiKey: stripOuterQuotes(rawKey),
+    apiKey,
+    keySource,
     smsUrl: stripOuterQuotes(rawUrl),
     senderId: stripOuterQuotes(rawSender).slice(0, 11),
     webhookSecret: stripOuterQuotes(rawWebhook),
@@ -1526,11 +1539,11 @@ async function sendArkeselV1Single({ apiKey, phone, sender, message, scheduledDa
  */
 router.get('/sms-balance', async (req, res) => {
   try {
-    const { apiKey, smsUrl } = getArkeselConfig();
+    const { apiKey, keySource, smsUrl } = getArkeselConfig();
     if (!apiKey) {
       return res.status(503).json({
         success: false,
-        error: 'ARKESEL_API_KEY / ARKESEL_SMS_SECRET is not configured on the server.',
+        error: 'ARKESEL_SMS_SECRET / ARKESEL_API_KEY is not configured on the server.',
       });
     }
 
@@ -1542,7 +1555,8 @@ router.get('/sms-balance', async (req, res) => {
       const r = await fetch(u.toString(), { method: 'GET' });
       const d = await r.json().catch(() => null);
       if (!r.ok || d?.code === '102' || d?.status === 'error' || (d?.balance === undefined && d?.sms_balance === undefined)) {
-        throw new Error(d?.message || 'Unable to fetch Arkesel v1 balance.');
+        const msg = d?.message || 'Unable to fetch Arkesel v1 balance.';
+        throw new Error(`${msg} (using ${keySource}, ${maskSecret(apiKey)})`);
       }
       return {
         success: true,
