@@ -1462,4 +1462,222 @@ router.post('/verify-judge-magic', async (req, res) => {
   }
 });
 
+function normalizeSmsPhone(raw) {
+  let digits = String(raw || '').replace(/[^\d+]/g, '').trim();
+  if (!digits) return '';
+  if (digits.startsWith('+')) digits = digits.slice(1);
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  // Convert 10-digit Ghana local format (024..., 055..., etc.) to 233XXXXXXXXX
+  if (digits.startsWith('0') && digits.length === 10) {
+    digits = `233${digits.slice(1)}`;
+  }
+  if (!/^\d{10,15}$/.test(digits)) return '';
+  return digits;
+}
+
+function getArkeselConfig() {
+  return {
+    apiKey: (process.env.ARKESEL_API_KEY || process.env.ARKESEL_SMS_SECRET || '').trim(),
+    smsUrl: (process.env.ARKESEL_SMS_URL || 'https://sms.arkesel.com/api/v2/sms/send').trim(),
+    senderId: (process.env.ARKESEL_SENDER_ID || 'HatchPoint').trim().slice(0, 11),
+    webhookSecret: (process.env.ARKESEL_WEBHOOK_SECRET || '').trim(),
+  };
+}
+
+/**
+ * GET /api/notifications/sms-balance
+ * Fetches remaining Arkesel SMS credits using server-side ARKESEL_API_KEY / ARKESEL_SMS_SECRET.
+ */
+router.get('/sms-balance', async (req, res) => {
+  try {
+    const { apiKey } = getArkeselConfig();
+    if (!apiKey) {
+      return res.status(503).json({
+        success: false,
+        error: 'ARKESEL_API_KEY / ARKESEL_SMS_SECRET is not configured on the server.',
+      });
+    }
+
+    const resp = await fetch('https://sms.arkesel.com/api/v2/clients/balance-details', {
+      method: 'GET',
+      headers: { 'api-key': apiKey },
+    });
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || data?.status === 'error') {
+      return res.status(resp.status || 502).json({
+        success: false,
+        error: data?.message || 'Unable to fetch Arkesel balance.',
+      });
+    }
+
+    return res.json({
+      success: true,
+      smsBalance: data?.data?.sms_balance ?? data?.sms_balance ?? null,
+      mainBalance: data?.data?.main_balance ?? data?.main_balance ?? null,
+      raw: data?.data || data,
+    });
+  } catch (err) {
+    console.error('Error in /api/notifications/sms-balance:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/send-bulk-sms
+ * Proxies bulk or personalized SMS dispatches through Arkesel v2 API.
+ */
+router.post('/send-bulk-sms', async (req, res) => {
+  try {
+    const { apiKey, smsUrl, senderId: defaultSender } = getArkeselConfig();
+    if (!apiKey) {
+      return res.status(503).json({
+        success: false,
+        error: 'ARKESEL_API_KEY / ARKESEL_SMS_SECRET is not configured on the server.',
+      });
+    }
+
+    const { sender, recipients, message, scheduledDate, personalizedPayloads } = req.body || {};
+    const finalSender = String(sender || defaultSender || 'HatchPoint').trim().slice(0, 11);
+    if (!finalSender) {
+      return res.status(400).json({ success: false, error: 'Sender ID is required.' });
+    }
+
+    // Personalized per-recipient mode (when tokens like {{team_name}} are used)
+    if (Array.isArray(personalizedPayloads) && personalizedPayloads.length > 0) {
+      let delivered = 0;
+      let failed = 0;
+      const results = [];
+
+      const CHUNK = 5;
+      for (let i = 0; i < personalizedPayloads.length; i += CHUNK) {
+        const slice = personalizedPayloads.slice(i, i + CHUNK);
+        const batchOut = await Promise.all(
+          slice.map(async (item) => {
+            const phone = normalizeSmsPhone(item.phone);
+            const msg = String(item.message || '').trim();
+            if (!phone || !msg) {
+              failed++;
+              return { phone: item.phone, success: false, error: 'Invalid phone or empty message' };
+            }
+            const body = {
+              sender: finalSender,
+              message: msg,
+              recipients: [phone],
+              ...(scheduledDate ? { scheduled_date: scheduledDate } : {}),
+            };
+            try {
+              const r = await fetch(smsUrl, {
+                method: 'POST',
+                headers: {
+                  'api-key': apiKey,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body),
+              });
+              const d = await r.json().catch(() => null);
+              if (r.ok && d?.status !== 'error') {
+                delivered++;
+                return { phone, success: true, data: d?.data || d };
+              }
+              failed++;
+              return { phone, success: false, error: d?.message || `HTTP ${r.status}` };
+            } catch (e) {
+              failed++;
+              return { phone, success: false, error: e.message };
+            }
+          })
+        );
+        results.push(...batchOut);
+      }
+
+      addLog('info', `Arkesel personalized SMS: ${delivered} delivered, ${failed} failed (Sender: ${finalSender})`);
+      return res.json({
+        success: delivered > 0 && failed === 0,
+        delivered,
+        failed,
+        total: personalizedPayloads.length,
+        results,
+      });
+    }
+
+    // Standard bulk mode (identical message to all recipients)
+    const rawList = Array.isArray(recipients) ? recipients : [recipients];
+    const cleanSet = new Set();
+    const invalid = [];
+    rawList.forEach((r) => {
+      const norm = normalizeSmsPhone(r);
+      if (norm) cleanSet.add(norm);
+      else if (r) invalid.push(r);
+    });
+    const cleanRecipients = Array.from(cleanSet);
+
+    if (cleanRecipients.length === 0 || !String(message || '').trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'At least one valid phone number and a non-empty message are required.',
+        invalid,
+      });
+    }
+
+    const payload = {
+      sender: finalSender,
+      message: String(message).trim(),
+      recipients: cleanRecipients,
+      ...(scheduledDate ? { scheduled_date: scheduledDate } : {}),
+    };
+
+    const resp = await fetch(smsUrl, {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json().catch(() => null);
+
+    if (!resp.ok || data?.status === 'error') {
+      addLog('fail', `Arkesel bulk SMS failed: ${data?.message || resp.status}`);
+      return res.status(resp.status || 502).json({
+        success: false,
+        error: data?.message || `Arkesel API error (HTTP ${resp.status})`,
+        raw: data,
+      });
+    }
+
+    addLog('info', `Arkesel bulk SMS sent to ${cleanRecipients.length} recipient(s) (Sender: ${finalSender})`);
+    return res.json({
+      success: true,
+      delivered: cleanRecipients.length,
+      failed: invalid.length,
+      total: cleanRecipients.length + invalid.length,
+      invalid,
+      data: data?.data || data,
+    });
+  } catch (err) {
+    console.error('Error in /api/notifications/send-bulk-sms:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/sms-webhook
+ * Receives Arkesel SMS delivery reports verified via ARKESEL_WEBHOOK_SECRET.
+ */
+router.post('/sms-webhook', (req, res) => {
+  const { webhookSecret } = getArkeselConfig();
+  if (webhookSecret) {
+    const provided =
+      req.headers['x-webhook-secret'] ||
+      req.headers['x-arkesel-secret'] ||
+      req.query?.secret ||
+      '';
+    if (String(provided) !== webhookSecret) {
+      return res.status(401).json({ success: false, error: 'Unauthorized webhook secret.' });
+    }
+  }
+  addLog('info', `Arkesel SMS webhook received: ${JSON.stringify(req.body || {}).slice(0, 200)}`);
+  return res.json({ success: true });
+});
+
 export default router;
