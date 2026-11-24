@@ -194,15 +194,34 @@ function wrapHtml(title, preheader, bodyHtml, actionButton = null, brandName = '
 /**
  * Sends meeting live or scheduled email to an attendee or list of attendees via Resend batch API
  */
+function normalizeResendAttachments(attachments) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return [];
+  return attachments
+    .filter((a) => a && a.filename && a.content)
+    .map((a) => {
+      const cid = a.content_id || a.contentId || a.cid || null;
+      const ctype = a.content_type || a.contentType || null;
+      return {
+        filename: String(a.filename),
+        content: a.content,
+        ...(cid ? { content_id: String(cid) } : {}),
+        ...(ctype ? { content_type: String(ctype) } : {}),
+      };
+    });
+}
+
 async function dispatchResendBatchEmails({
   client,
   recipients,
   subject,
   html,
   text = null,
+  attachments = [],
   contextTag = 'Batch Email',
   metadata = {},
 }) {
+  const normalizedAttachments = normalizeResendAttachments(attachments);
+  const attachOpt = normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {};
   const validRecipients = Array.from(
     new Set(
       (recipients || [])
@@ -230,6 +249,7 @@ async function dispatchResendBatchEmails({
         subject,
         html,
         ...(text ? { text } : {}),
+        ...attachOpt,
       });
 
       // Domain unverified fallback for single email
@@ -249,6 +269,7 @@ async function dispatchResendBatchEmails({
           subject,
           html,
           ...(text ? { text } : {}),
+          ...attachOpt,
         });
         data = retryRes.data;
         error = retryRes.error;
@@ -302,6 +323,7 @@ async function dispatchResendBatchEmails({
           subject,
           html,
           ...(text ? { text } : {}),
+          ...attachOpt,
         }));
 
       let response = null;
@@ -397,6 +419,7 @@ async function dispatchResendBatchEmails({
                     subject,
                     html,
                     ...(text ? { text } : {}),
+                    ...attachOpt,
                   });
                   if (
                     singleRes.error &&
@@ -410,6 +433,7 @@ async function dispatchResendBatchEmails({
                       subject,
                       html,
                       ...(text ? { text } : {}),
+                      ...attachOpt,
                     });
                   }
 
@@ -784,6 +808,7 @@ export async function sendBulkBroadcastEmail({
   senderName = null,
   actionButton = null,
   html = null,
+  attachments = [],
   appUrl = 'https://labs-pyi3.onrender.com',
 }) {
   const client = getResendClient();
@@ -822,6 +847,7 @@ export async function sendBulkBroadcastEmail({
     recipients,
     subject: heading,
     html: finalHtml,
+    attachments,
     contextTag: `${brand}: ${heading}`,
     metadata: { subject, title: heading, senderName: brand },
   });
