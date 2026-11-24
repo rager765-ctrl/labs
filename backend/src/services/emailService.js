@@ -199,13 +199,13 @@ function normalizeResendAttachments(attachments) {
   return attachments
     .filter((a) => a && a.filename && a.content)
     .map((a) => {
-      const cid = a.content_id || a.contentId || a.cid || null;
-      const ctype = a.content_type || a.contentType || null;
+      const cid = a.contentId || a.content_id || a.cid || null;
+      const ctype = a.contentType || a.content_type || null;
       return {
         filename: String(a.filename),
         content: a.content,
-        ...(cid ? { content_id: String(cid) } : {}),
-        ...(ctype ? { content_type: String(ctype) } : {}),
+        ...(cid ? { contentId: String(cid) } : {}),
+        ...(ctype ? { contentType: String(ctype) } : {}),
       };
     });
 }
